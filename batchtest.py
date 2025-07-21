@@ -1,10 +1,10 @@
 import csv
 import time
 import os
-
+from autoremove import solve_with_ilp_analysis
 
 #salvo i risultati in file CVS 
-def batch_run(instances_folder="gen_instance", output_csv="risultati/risultati_batch.csv", max_iter=10):
+def batch_run(instances_folder="new_20", output_csv="risultati/risultati_batch2.csv", max_iter=20):
     if not os.path.exists("risultati"): #creo la cartella se non esiste già
         os.makedirs("risultati")
 
@@ -46,7 +46,7 @@ def batch_run(instances_folder="gen_instance", output_csv="risultati/risultati_b
 
 def main():
     print("Avvio batch test su tutte le istanze...")
-    batch_run("istanze", "risultati", max_iter=10)
+    batch_run("new_20", "risultati/risultati_batch2.csv", max_iter=20)
 
 
 

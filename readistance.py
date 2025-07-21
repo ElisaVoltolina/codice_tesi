@@ -83,7 +83,7 @@ def create_darp_data(nodes_data, travel_times, route_time, capacity):
     """
     Converto i dati dell'istanza nel formato richiesto dal modello DARP
     """
-    n_original = len(nodes_data)
+    n_original = len(nodes_data)  
     
     # Trova il deposito (nodo con demand=0 e pickup_node=0)
     depot_node = None
@@ -95,11 +95,11 @@ def create_darp_data(nodes_data, travel_times, route_time, capacity):
     if depot_node is None:
         raise ValueError("Deposito non trovato nell'istanza")
     
-    # Separa pickup e delivery nodes
+    # Separa pickup e delivery nodes   
     pickup_nodes = [node for node in nodes_data if node['demand'] > 0]
     delivery_nodes = [node for node in nodes_data if node['demand'] < 0]
     
-    n = len(pickup_nodes)  # Numero di richieste
+    n = len(pickup_nodes)  # Numero di richieste 
     
     # Riordina i nodi: deposito(0), pickup(1...n), delivery(n+1...2n)
     all_nodes = [depot_node] + pickup_nodes + delivery_nodes
@@ -115,7 +115,7 @@ def create_darp_data(nodes_data, travel_times, route_time, capacity):
     P = np.arange(1, n + 1)  # Nodi pickup: 1...n
     D = np.arange(n + 1, 2*n + 1)  # Nodi delivery: n+1...2n
     PD = np.concatenate((P,D))
-    PHOME = np.arange(1,n//2 +1)
+    PHOME = np.arange(1,n//2 +1)    #divisione intera
     PHOSP = np.arange(n//2 +1, n+1)
     DHOME = np.array([i + n for i in PHOSP])  
     DHOSP = np.array([i + n for i in PHOME])  

@@ -80,7 +80,7 @@ def parse_ilp_file(ilp_filename="model_infeasible.ilp", P=None , D=None, n=None)
     print(f"Coppie problematiche identificate: {problematic_pairs}")
     return problematic_pairs #nuova numerazione
 
-def solve_with_ilp_analysis(instance_filename, max_iterations=10):
+def solve_with_ilp_analysis(instance_filename, max_iterations=20):
     """
     Risolve il problema DARP usando l'analisi del file ILP per identificare
     i nodi problematici in modo preciso.
@@ -109,7 +109,7 @@ def solve_with_ilp_analysis(instance_filename, max_iterations=10):
         
         # Crea i dati DARP con le esclusioni attuali
         darp_data = create_darp_data(nodes_data, travel_times, route_time, capacity, exclude_requests)
-        #P = darp_data['P']
+        
         
         # Risolvi il problema
         try:
@@ -203,7 +203,7 @@ def solve_with_ilp_analysis(instance_filename, max_iterations=10):
         
         iteration += 1
     
-    print(f"\n Raggiunto il limite massimo di iterazioni ({max_iterations})")
+    print(f"\n Raggiunto il limite massimo di iterazioni ({max_iterations})")  #attenzione mi da questo messaggio anche se non raggiunge il numero max ma esclude tutti i nodi prima
     print(f"Nodi esclusi: {exclude_requests}")
     return None, exclude_requests, None
 
@@ -215,9 +215,8 @@ def main():
     """
     instance_filename = "ipdptw-n20-ber.txt"
     
-    print(" Inizio risoluzione automatica con analisi ILP...")
-    print(" Questo metodo usa il file ILP generato da Gurobi per identificare")
-    print("    i nodi problematici in modo preciso e deterministico.")
+    print(" Inizio risoluzione automatica con analisi ILP...") #usa il file ILP generato da Gurobi per identificare i nodi problematici
+   
     
     # Esegui la risoluzione con analisi ILP
     solution, final_exclude_requests, darp_data = solve_with_ilp_analysis(instance_filename)

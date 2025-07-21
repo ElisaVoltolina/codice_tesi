@@ -1,11 +1,12 @@
 import gurobipy as gb
 
 from gurobipy import Model, GRB, quicksum
-#import parameters
 
 def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q, Q):
     
     model = Model("DARP")
+
+   
 
     # Variabili
     x = model.addVars(idx, vtype=GRB.BINARY, name="x")
@@ -24,9 +25,9 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
 
 
 # DEBUG: Stampa i limiti temporali per verifica
-    print("Time Windows:")
-    for i in V:
-        print(f"Node {i}: [{e[i]} - {l[i]}]")
+    #print("Time Windows:")
+    #for i in V:
+        #print(f"Node {i}: [{e[i]} - {l[i]}]")
     
     # Controlla se ci sono incoerenze nei time window
     for i in P:
@@ -161,7 +162,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     
     # Aggiungi più dettagli nella fase di log
     model.Params.OutputFlag = 1
-    model.Params.LogToConsole = 1
+    model.Params.LogToConsole = 0
 
 
     # Risoluzione
