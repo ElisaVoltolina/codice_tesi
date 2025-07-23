@@ -6,7 +6,7 @@ from readistance import*
 
 
 # Parsifica istanza completa (nodi + archi)
-nodes_data, travel_times, route_time, capacity = parse_pdptw_instance("new_20/ipdptw-n100-ber0.txt")
+nodes_data, travel_times, route_time, capacity = parse_pdptw_instance("gen_instances/ipdptw-n20-ber8.txt")
 
 #richieste da escludere (DEVE CONTENERE SEMPRE LA NUMERAZIONE ORIGINALE, non i nuovi incidi dopo aver fatto già delle escuksioni)
 #exclude_requests = [] 

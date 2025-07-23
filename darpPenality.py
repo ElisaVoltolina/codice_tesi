@@ -71,21 +71,22 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     # Assicura che il pickup sia sempre prima del delivery corrispondente (solo se la richiesta è servita)
     for i in P:
         model.addGenConstrIndicator(y[i], True,B[i] + s[i] + t[i][i+n] <= B[i+n],name=f"precedenza_pickup_delivery_{i}")
+    
     #Precedenza richiesta outbound-inbound (solo se entrambe sono servite)
-    model.addConstrs((B[i+n] + s[i+n] + t[i+n][i+n//2] <= B[i+n//2] + big_M * (2 - y[i] - y[i +n//2]) for i in PHOME), name="precedenza_outbound_inbound")
+    
+    for i in PHOME:
+        model.addGenConstrIndicator(y[i],True, B[i+n] + s[i+n] + t[i+n][i+n//2] <= B[i+n//2] , name=f"precedenza_outbound_inbound_{i}")
 
    
-
-
-
-    # Tempo di arrivo
     # Big-M calculation
     M = {}
     for i, j in idx:
         M[i,j] = max(0, l[i] + s[i] + t[i][j] - e[j]) + 1000  # Aggiungo un margine di sicurezza
 
    
-   
+#DA QUI MODIFICARE
+
+    # Tempo di arrivo e inizio servizio
     # Tempo tra nodi consecutivi con vincolo Big-M
     model.addConstrs((A[j] >= B[i] + s[i] + t[i][j] - M[i,j] * (1 - x[i, j]) for i,j in idx ), name="tempo_arrivoA") 
 
@@ -93,20 +94,55 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
 
 
     # Variabile binaria per determinare se A[i] è all'interno della finestra temporale
-    in_window = model.addVars(V, vtype=GRB.BINARY, name="in_window")
-
-    
-    # Se A[i] >= e[i], allora in_window[i] = 1
-    model.addConstrs((A[i] >= e[i] - big_M * (1 - in_window[i]) for i in V), name="in_window_check1")
-    model.addConstrs((A[i] <= e[i] + big_M * in_window[i] for i in V), name="in_window_check2")
-    
     # Se in_window[i] = 1, allora B[i] = A[i]
     # Se in_window[i] = 0, allora B[i] = e[i]
-    model.addConstrs((B[i] >= A[i] - big_M * (1 - in_window[i]) for i in V), name="set_B_if_in_window1")
-    model.addConstrs((B[i] <= A[i] + big_M * (1 - in_window[i]) for i in V), name="set_B_if_in_window2")
+    in_window = model.addVars(V, vtype=GRB.BINARY, name="in_window")
+
+    # Per depositi, in_window è sempre attivo FORSE SUPERFLO SPECIFICARE
+    #model.addConstr(in_window[0] == 1, name="deposito_inizio_sempre_attivo")
+    #model.addConstr(in_window[2*n+1] == 1, name="deposito_fine_sempre_attivo")
+
+    for i in V:
+        if i==0 or i==2*n +1: #per i depositi i vincoli sono sempre attivi
+             model.addConstrs((A[i] >= e[i] - big_M * (1 - in_window[i]) for i in V), name="in_window_check1")
+             model.addConstrs((A[i] <= e[i] + big_M * in_window[i] for i in V), name="in_window_check2")
+        elif i in P:
+            model.addGenConstrIndicator(y[i],True, A[i] >= e[i] - big_M * (1 - in_window[i]), name=f"in_window_check1_pickup_{i}" )
+            model.addGenConstrIndicator(y[i], True, A[i] <= e[i] + big_M * in_window[i], name=f"in_window_check2-pickup_{i}" )
+        elif i in D:
+            model.addGenConstrIndicator(y[i-n], True, A[i] >= e[i] - big_M * (1 - in_window[i]), name=f"in_window_check1_delivery_{i}" )
+            model.addGenConstrIndicator(y[i-n], True, A[i] <= e[i] + big_M * in_window[i], name=f"in_window_check2_delivery_{i}" )
     
-    model.addConstrs((B[i] >= e[i] - big_M * in_window[i] for i in V), name="set_B_if_not_in_window1")
-    model.addConstrs((B[i] <= e[i] + big_M * in_window[i] for i in V), name="set_B_if_not_in_window2")
+    
+    for i in V:
+        if i==0 or i==2*n +1: #per i depositi i vincoli sono sempre attivi
+            model.addConstrs((B[i] >= A[i] - big_M * (1 - in_window[i]) for i in V), name="set_B_if_in_window1")
+            model.addConstrs((B[i] <= A[i] + big_M * (1 - in_window[i]) for i in V), name="set_B_if_in_window2")
+    
+            model.addConstrs((B[i] >= e[i] - big_M * in_window[i] for i in V), name="set_B_if_not_in_window1")
+            model.addConstrs((B[i] <= e[i] + big_M * in_window[i] for i in V), name="set_B_if_not_in_window2")
+        elif i in P:
+            model.addGenConstrIndicator(y[i],True, B[i] >= A[i] - big_M * (1 - in_window[i]), name=f"set_B_if_in_window1_pickup_{i}" )
+            model.addGenConstrIndicator(y[i], True, B[i] <= A[i] + big_M * (1 - in_window[i]), name=f"set_B_if_in_window2_pickup_{i}" )
+
+            model.addGenConstrIndicator(y[i],True, B[i] >= e[i] - big_M * in_window[i], name=f"set_B_if_not_in_window1_pickup_{i}" )
+            model.addGenConstrIndicator(y[i], True, B[i] <= e[i] + big_M * in_window[i], name=f"et_B_if_not_in_window2_pickup_{i}" )
+
+            # Per richieste NON servite, imposta tempi a 0 
+            #model.addGenConstrIndicator(y[i], False, A[i] == 0, name=f"reset_A_pickup_non_servito_{i}")
+            #model.addGenConstrIndicator(y[i], False, B[i] == 0, name=f"reset_B_pickup_non_servito_{i}")
+        elif i in D:
+            model.addGenConstrIndicator(y[i-n],True, B[i] >= A[i] - big_M * (1 - in_window[i]), name=f"set_B_if_in_window1_delivery_{i}" )
+            model.addGenConstrIndicator(y[i-n], True, B[i] <= A[i] + big_M * (1 - in_window[i]), name=f"set_B_if_in_window2_delivery_{i}" )
+
+            model.addGenConstrIndicator(y[i-n],True, B[i] >= e[i] - big_M * in_window[i], name=f"set_B_if_not_in_window1_delivery_{i}" )
+            model.addGenConstrIndicator(y[i-n], True, B[i] <= e[i] + big_M * in_window[i], name=f"et_B_if_not_in_window2_delivery_{i}" )
+
+            # Per richieste NON servite, imposta tempi a 0 
+            #model.addGenConstrIndicator(y[i-n], False, A[i] == 0, name=f"reset_A_delivery_non_servito_{i}")
+            #model.addGenConstrIndicator(y[i-n], False, B[i] == 0, name=f"reset_B_delivery_non_servito_{i}")
+    
+   #se imposto a zero quando non servita diventa infattibile PERCHè
 
    
 
@@ -126,7 +162,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
 
 
 
-    # Time window    (qui non serve disattivarli)
+    # Time window    (qui non serve disattivarli) QUESTI LI POSSO TOGLIERE PENSO
     model.addConstrs((B[i] >= e[i] for i in V), name="timewindow1")
     model.addConstrs((B[i] <= l[i] for i in V), name="timewindow2")  
 
@@ -137,14 +173,10 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     # Tempo di attesa
     for i in PHOSP:
         model.addGenConstrIndicator(y[i], True,  WP[i] >= A[i] - e[i] , name="tempo_attesa_pickup")
-        model.addGenConstrIndicator(y[i], False, 
-                                   WP[i] == 0, 
-                                   name=f"no_attesa_pickup_non_servito_{i}")
+        model.addGenConstrIndicator(y[i], False, WP[i] == 0, name=f"no_attesa_pickup_non_servito_{i}")
     for i in DHOSP:
         model.addGenConstrIndicator( y[i-n], True  ,WP[i] >= A[i] - l[i] , name="tempo_attesa_delivery")
-        model.addGenConstrIndicator(y[i-n], False, 
-                                   WP[i] == 0, 
-                                   name=f"no_attesa_delivery_non_servito_{i}")
+        model.addGenConstrIndicator(y[i-n], False, WP[i] == 0, name=f"no_attesa_delivery_non_servito_{i}")
     model.addConstrs((WP[i] >= 0 for i in HOSP), name="tempo_attesa")
 
 
@@ -196,7 +228,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     if model.status == GRB.INFEASIBLE:
         print("Il modello è infattibile! Cerco il conflitto tra i vincoli...")
         model.computeIIS()
-        model.write("model_infeasible.ilp")  # Salva i vincoli impossibili in un file
+        model.write("model_infeasibleP.ilp")  # Salva i vincoli impossibili in un file
 
     # Recupero della soluzione 
     if model.status == GRB.OPTIMAL or model.status == GRB.TIME_LIMIT:
@@ -211,14 +243,14 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
                 solution_x[(i, j)] = 1
                 print(f"Arco ({i},{j}) attivo")
         
-        solution_y = {i: y[i].X for i in P}  # NUOVO: richieste servite
+        solution_y = {i: y[i].X for i in P}  
         solution_A = {i: A[i].X for i in V}
         solution_B = {i: B[i].X for i in V}
         solution_L = {i: L[i].X for i in P}
         solution_WP = {i: WP[i].X for i in HOSP}
         solution_Q = {i: Q_var[i].X for i in V}   
 
-        # Stampa informazioni aggiuntive per debug
+        # Stampa informazioni 
         print(f"\nRichieste servite: {sum(solution_y.values())}/{len(P)}")
         for i in P:
             if solution_y[i] > 0.5:
@@ -234,7 +266,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
         for i in V:
             print(f"Nodo {i}: {solution_B[i]:.2f} (finestra: {e[i]}-{l[i]})")
             
-        return solution_x, solution_A, solution_L, solution_B, solution_WP, solution_Q, solution_y  # NUOVO: restituisco anche y
+        return solution_x, solution_A, solution_L, solution_B, solution_WP, solution_Q, solution_y  
     else:
         print("No optimal solution found")
         return None
