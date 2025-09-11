@@ -30,15 +30,25 @@ LISTA_COMUNI = ["Arba",
         "Vito d'Asio",
         "Vivaro"]
 
+# Numero di istanze da creare per ogni numero di trasporti
+NUM_ISTANZE_PER_TRASPORTI = 4  
+SUFFISSI = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
+
+
 os.makedirs('indirizzi', exist_ok=True)
 os.makedirs('routes', exist_ok=True)
 os.makedirs('data', exist_ok=True)
 os.makedirs('addresses', exist_ok=True)
 
+# Scarica gli indirizzi (una sola volta ora)
+download_indirizzi(lista_comuni=LISTA_COMUNI)
+
 for NUM_TRASPORTI_OGGI in NUM_TRASPORTI_LISTA:
-    download_indirizzi(lista_comuni=LISTA_COMUNI)
-    addresses = get_indirizzi(NUM_TRASPORTI_OGGI)
-    pazienti = fake_pazienti(addresses, LISTA_OSPEDALI)
+    for i in range(NUM_ISTANZE_PER_TRASPORTI):
+        suff=SUFFISSI[i]
+   
+        addresses = get_indirizzi(NUM_TRASPORTI_OGGI, suff)
+        pazienti = fake_pazienti(addresses, LISTA_OSPEDALI, suff)
 
 # calcolo le distanze tra indirizzo i e 2 (tutte le combinazioni possibili)
 for address1 in addresses:

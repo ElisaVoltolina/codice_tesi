@@ -30,16 +30,32 @@ def download_indirizzi(lista_comuni):
             with open(f'indirizzi/{comune}.json', 'w') as f:
                 json.dump(data, f)
 
-def get_indirizzi(NUM_TRASPORTI_OGGI):
+def get_indirizzi(NUM_TRASPORTI_OGGI, suffisso=''):
+    """creo un fil epr ogni suffisso"""
+    if suffisso:
+        filename= f'{NUM_TRASPORTI_OGGI}{suffisso}.json'
+    else:
+        filename = f'{NUM_TRASPORTI_OGGI}.json'
     
-    path = f'addresses/{NUM_TRASPORTI_OGGI}.json'
+    path= f'addresses/{filename}'
+    
     if not os.path.isfile(path):
         all_addresses = []
         for comune in os.listdir('indirizzi'):
             with open(f'indirizzi/{comune}') as f:
                 data = json.load(f)
                 for d in data['elements']:
-                    all_addresses.append(d)
+                    # HO AGGIUNTO QUESTO CONTROLLO
+                    ''' in questo modo filtra localmente gli indirizzi già
+                    scaricati e prende solo quelli con tutti i tags. 
+                    ACCETTA SOLO INDIRIZZI COMPLETI'''
+                    tags = d.get('tags', {})
+                    if ('addr:street' in tags and 
+                        'addr:housenumber' in tags):
+                        all_addresses.append(d)
+
+        if suffisso:  # Usa seed diverso per ogni istanza per ottenere indirizzi diversi
+            random.seed(hash(f"{NUM_TRASPORTI_OGGI}{suffisso}"))
 
         # Tiro fuori indirizzi a caso
         address = []
@@ -74,19 +90,31 @@ def calcola_distanza(address1, address2):
             data = json.load(f)
     return data
     
-def fake_pazienti(addresses, LISTA_OSPEDALI):
-    path = f'data/{len(addresses)}.json'
+def fake_pazienti(addresses, LISTA_OSPEDALI, suffisso=''):
+
+    if suffisso:
+        filename = f'{len(addresses)}{suffisso}.json'
+    else:
+        filename = f'{len(addresses)}.json'
+
+    path=f'data/{filename}'
+
     if not os.path.isfile(path):
         pazienti = []
         fake = Faker('it_IT')
-        Faker.seed(4321)
+        
+        # Usa seed diverso per ogni istanza per ottenere dati diversi
+        if suffisso:
+            Faker.seed(hash(f"4321{len(addresses)}{suffisso}"))
+        else:
+            Faker.seed(4321)
         
         start = datetime.datetime.now().replace(hour=9, minute=0)
         end = datetime.datetime.now().replace(hour=17, minute=0)
 
         for address in addresses:
             d0 = fake.date_time_between(start, end)
-            print(d0)
+            #print(d0)
             d1 = d0 + datetime.timedelta(minutes=random.randint(30, 90))
             
             pazienti.append({
@@ -105,18 +133,18 @@ def fake_pazienti(addresses, LISTA_OSPEDALI):
                 ],
                 "domicilio_andata": {
                     "indirizzo": address['tags']['addr:street'],
-                    "cap": address['tags']['addr:postcode'],
+                    "cap": address['tags'].get('addr:postcode', ''),
                     "n_civico": address['tags']['addr:housenumber'],
-                    "citta": address['tags']['addr:city'],
+                    "citta": address['tags'].get('addr:city', ''),
                     "nazione": "IT",
                     "lat": address['lat'],
                     "lon": address['lon'],
                 },
                 "domicilio_ritorno": {
                     "indirizzo": address['tags']['addr:street'],
-                    "cap": address['tags']['addr:postcode'],
+                    "cap": address['tags'].get('addr:postcode', ''),
                     "n_civico": address['tags']['addr:housenumber'],
-                    "citta": address['tags']['addr:city'],
+                    "citta": address['tags'].get('addr:city', ''),
                     "nazione": "IT"
                 },
                 "destinazione": random.choice(LISTA_OSPEDALI),
@@ -130,10 +158,10 @@ def fake_pazienti(addresses, LISTA_OSPEDALI):
                 "note": "Altre informazioni utili"
             })
         with open(path, 'w') as f:
-            print(pazienti)
+            #print(pazienti)
             json.dump(pazienti, f)
     else:
-        print(path)
+        #print(path)
         with open(path) as f:
             pazienti = json.load(f)
 

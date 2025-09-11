@@ -1,4 +1,4 @@
-istanza,num_richieste,richieste_esclusi,archi_attivi,tempo_sec,soluzione_trovata
+istanza,num_richieste,richieste_servite,archi_attivi,tempo_sec,soluzione_trovata
 ipdptw-n100-ber0.txt,50,8.0,17,602.03,True
 ipdptw-n100-ber1.txt,50,8.0,17,124.43,True
 ipdptw-n100-ber2.txt,50,8.0,17,77.48,True

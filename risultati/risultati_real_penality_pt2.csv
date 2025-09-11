@@ -1,0 +1,17 @@
+istanza,num_richieste,richieste_servite,tempo_sec,soluzione_trovata
+input_modello_10apt2.json,20,10.0,600.54,True
+input_modello_10bpt2.json,20,10.0,600.48,True
+input_modello_10cpt2.json,20,12.0,600.58,True
+input_modello_10dpt2.json,-,-,0.42,False
+input_modello_10pt2.json,20,12.0,600.56,True
+input_modello_12dpt2.json,24,12.0,600.59,True
+input_modello_17dpt2.json,34,18.0,600.96,True
+input_modello_20dpt2.json,-,-,1.13,False
+input_modello_5apt2.json,10,6.0,0.52,True
+input_modello_5bpt2.json,-,-,0.09,False
+input_modello_5cpt2.json,10,8.0,0.63,True
+input_modello_5dpt2.json,10,6.0,1.35,True
+input_modello_5pt2.json,10,8.0,1.0,True
+input_modello_8apt2.json,16,10.0,600.99,True
+input_modello_8bpt2.json,16,8.0,600.75,True
+input_modello_8pt2.json,16,14.0,48.76,True

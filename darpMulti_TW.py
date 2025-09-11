@@ -255,7 +255,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, DHOME, HOME, P, D, PD, idx, n, t, s
             model.addConstr(u[j] >= u[i] + 1 - (2*n+1) * (1 - x[i, j]), name=f"subtour_{i}_{j}")
     
     # Risoluzione con timeout aumentato
-    model.Params.TimeLimit = 600  # 10 minuti di timeout
+    model.Params.TimeLimit = 3600  # 10 minuti di timeout
     model.Params.MIPGap = 0.05    # 5% gap di ottimalità
     model.Params.FeasibilityTol = 1e-6  # Tolleranza di feasibility più stringente
     
@@ -275,7 +275,9 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, DHOME, HOME, P, D, PD, idx, n, t, s
     if model.status == GRB.OPTIMAL or model.status == GRB.TIME_LIMIT:
         if model.status == GRB.OPTIMAL:
             print('Soluzione ottimale trovata')
+            current_gap= 0.0
         else:
+            current_gap = model.MIPGap
             print(f'Soluzione sub-ottimale trovata con gap {model.MIPGap*100:.2f}%')
             
         solution_x = {}
@@ -322,7 +324,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, DHOME, HOME, P, D, PD, idx, n, t, s
             else:
                 print(f"Nodo {i}: {solution_B[i]:.2f} (finestra: {e[i]}-{l[i]})")
             
-        return solution_x, solution_A, solution_L, solution_B, solution_WP, solution_Q, solution_y, solution_z  
+        return (solution_x, solution_A, solution_L, solution_B, solution_WP, solution_Q, solution_y, solution_z), current_gap  
     else:
         print("No optimal solution found")
         return None

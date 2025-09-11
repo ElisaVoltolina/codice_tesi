@@ -2,7 +2,7 @@ import gurobipy as gb
 
 from gurobipy import Model, GRB, quicksum
 
-def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q, Q, penalty_weights=None):
+def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q, Q,  penalty_weights=None):
     
     model = Model("DARP")
 
@@ -12,17 +12,17 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
         penalty_weights = {i: 1000 for i in P}  # Penalità alta per incoraggiare il servizio
 
     # Variabili
-    x = model.addVars(idx, vtype=GRB.BINARY, name="x")
-    y = model.addVars(P, vtype=GRB.BINARY, name="y")  
-    A = model.addVars(V, vtype=GRB.CONTINUOUS, name="A")
-    B = model.addVars(V, vtype=GRB.CONTINUOUS, name="B")
-    L = model.addVars(P, vtype=GRB.CONTINUOUS, name="L")
-    WP = model.addVars(HOSP, vtype=GRB.CONTINUOUS, name="WP")
-    Q_var = model.addVars(V, vtype=GRB.CONTINUOUS, name="Q")
+    x = model.addVars(idx, vtype=GRB.BINARY, name="x")  #1 se l'arco è attivo, 0 altimenti
+    y = model.addVars(P, vtype=GRB.BINARY, name="y")  # 1 se la richiesta viene eseguita, 0 altrimenti
+    A = model.addVars(V, vtype=GRB.CONTINUOUS, name="A")   #tempo di arrivo del veicolo al nodo i
+    B = model.addVars(V, vtype=GRB.CONTINUOUS, name="B")   #tempo inizio del servizio al nodo i
+    L = model.addVars(P, vtype=GRB.CONTINUOUS, name="L")   #tempo di percorrenza dell’utente relativo al nodo i sul veicolo
+    WP = model.addVars(HOSP, vtype=GRB.CONTINUOUS, name="WP")  #tempo di attesa del paziente al nodo i (ospedale)
+    Q_var = model.addVars(V, vtype=GRB.CONTINUOUS, name="Q")  #carico del veicolo quando lascia il nodo i
 
     # Funzione obiettivo MODIFICATA
-    obj_travel_time = quicksum(t[i][j] * x[i, j] for i,j in idx)
-    obj_waiting_time = quicksum(WP[i] for i in HOSP)
+    obj_travel_time = quicksum(t[i][j] * x[i, j] for i,j in idx)   #tempo di percorrenza
+    obj_waiting_time = quicksum(WP[i] for i in HOSP)   #tempo attesa all'ospedale (esclusa la durata della visita in sè)
     obj_penalty = quicksum(penalty_weights[i] * (1 - y[i]) for i in P)  # Penalità per richieste non servite
 
     model.setObjective(obj_travel_time + obj_waiting_time + obj_penalty, GRB.MINIMIZE) 
@@ -84,11 +84,15 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
         M[i,j] = max(0, l[i] + s[i] + t[i][j] - e[j]) + 1000  # Aggiungo un margine di sicurezza
 
    
-#DA QUI MODIFICARE
+
 
     # Tempo di arrivo e inizio servizio
     # Tempo tra nodi consecutivi con vincolo Big-M
     model.addConstrs((A[j] >= B[i] + s[i] + t[i][j] - M[i,j] * (1 - x[i, j]) for i,j in idx ), name="tempo_arrivoA") 
+     
+    '''#in questo modo se xij=1 vale l'uguaglianza 
+    for i, j in idx:
+        model.addGenConstrIndicator(x[i,j], True, A[j] == B[i] + s[i] + t[i][j], name=f"tempo_arrivo_esatto_{i}_{j}")'''
 
 
 
