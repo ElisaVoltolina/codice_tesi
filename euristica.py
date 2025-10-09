@@ -122,7 +122,7 @@ def heuristic(n,PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, alpha=1.0,
     ultima_iterazione = len(pazienti_ordinati)
     
     
-    for s in S[n//2]:  #nooooo
+    for s in S[iteration]:  #nooooo
         """#DEBAG
         key = tuple(s)
         if key not in Time[ultima_iterazione]:
