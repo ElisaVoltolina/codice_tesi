@@ -3,13 +3,11 @@ from readREAL import extract_darp_data
 import random
 from collections import defaultdict
 
-def heuristic_fast(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, 
-                   alpha=1.0, beta=1.0, L=5, pazienti_ordinati=None):
-    """
-    Versione VELOCE che MANTIENE la qualità:
-    - Tutti gli inserimenti vengono provati
-    - Ma con strutture dati efficienti
-    - E controlli intelligenti
+
+
+#
+def heuristic_fast(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max,alpha=1.0, beta=1.0, L=5, pazienti_ordinati=None):
+    """prova di una versione dell' euristica in cui provo il reinserimento solo sulle sequenze pù promettenti
     """
     
     S = {}
@@ -29,10 +27,8 @@ def heuristic_fast(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max,
         num_prev_sequences = len(S[iteration-1])
         processed = 0
         
-        for s in S[iteration-1]:  #QUI DA CAPIRE
-            processed += 1
-            if processed % 50 == 0:
-                print(f"  Processate {processed}/{num_prev_sequences} sequenze...")
+        for s in S[iteration-1]:  
+            
             
             s_middle = s[1:-1]
             m = len(s_middle)
@@ -40,7 +36,7 @@ def heuristic_fast(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max,
             #Pre-calcolo i limiti per evitare iterazioni inutili
             max_h = m + 1
             
-            # Prova TUTTE le posizioni 
+            # Prova tutte le posizioni 
             for h in range(max_h):
                 for k in range(h + 1, m + 2):
                     for v in range(k + 1, m + 3):
@@ -111,78 +107,10 @@ def heuristic_fast(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max,
     return migliore_sequenza, miglior_costo, scart
 
 
-def feasible_fast(r, serv, t_matrix, T, n, e, l, P, D, q, Q_max):
-    """
-    Versione ottimizzata di feasible con EARLY EXIT:
-    - Ferma appena trova una violazione
-    - Controlli più veloci prima (più economici)
-    """
-    m = len(r)
-    
-    # CONTROLLO 1: Verifica ordine pickup-delivery, questo potrebbe non servire!!
-    pickup_positions = {}
-    delivery_positions = {}
-    
-    for idx, node in enumerate(r):
-        if node in P:
-            pickup_positions[node] = idx
-        elif node in D:
-            delivery_positions[node] = idx
-            # Controlla che esista il pickup
-            pickup_node = node - n
-            if pickup_node not in pickup_positions:
-                return False, None
-            # Controlla ordine
-            if pickup_positions[pickup_node] >= idx:
-                return False, None
-    
-    # CONTROLLO 2: Capacità e tempi (insieme, un solo loop)
-    t = np.zeros(m)   #t[j] tempod i arrivo al nodo j
-    Q = np.zeros(m)   #Q[j] carico dopo aver visitato nodo j
-    ld = {}
-    
-    Q[0] = 0 
-    t[0] = 0
-    
-    for j in range(1, m):
-        prev_node = r[j-1]
-        curr_node = r[j]
-        
-        # Calcola tempo arrivo
-        t[j] = max(t[j-1], e[prev_node]) + serv[prev_node] + t_matrix[prev_node][curr_node]
-        
-        # EARLY EXIT: Violazione time window
-        if t[j] > l[curr_node]:
-            return False, None
-        
-        # Calcola carico
-        Q[j] = Q[j-1] + q[curr_node]
-        
-        # EARLY EXIT: Violazione capacità
-        if Q[j] < 0 or Q[j] > Q_max:
-            return False, None
-    
-    # CONTROLLO 3: Ride time (solo per delivery nodes)
-    for p_node in pickup_positions.keys():
-        d_node = p_node + n
-        
-        pickup_pos = pickup_positions[p_node]
-        delivery_pos = delivery_positions[d_node]
-        
-        ld[d_node] = min(l[d_node], max(t[pickup_pos], e[p_node]) + serv[p_node] + T[p_node]) #ultimo orario possibile per il delivery
-        
-        # EARLY EXIT: Violazione ride time
-        if t[delivery_pos] > ld[d_node]:
-            return False, None
-    
-    return True, t
 
-
-def reinserisci_scartati_smart(S, Time, iteration, scart, n, serv, 
-                               t_matrix, T, e, l, P, D, q, Q_max):
+def reinserisci_scartati_smart(S, Time, iteration, scart, n, serv, t_matrix, T, e, l, P, D, q, Q_max):
     """
-    Reinserimento scartati :
-    - Prova tutte le posizioni MA solo su sequenze promettenti
+    - Prova tutte le posizioni ma solo su sequenze promettenti
     - Ordina scartati per probabilità di successo
     """
     if len(scart) == 0:
@@ -203,7 +131,7 @@ def reinserisci_scartati_smart(S, Time, iteration, scart, n, serv,
     # Ordina per carico crescente (più spazio disponibile)
     seq_with_load.sort(key=lambda x: x[1])
     
-    # Prova su metà migliori sequenze (compromesso qualità/velocità)
+    # Prova su metà migliori sequenze
     num_seq = max(1, len(seq_with_load) // 2)
     promising_sequences = [s for s, _ in seq_with_load[:num_seq]]
     
@@ -220,7 +148,7 @@ def reinserisci_scartati_smart(S, Time, iteration, scart, n, serv,
             s_inner = s[1:-1]
             m = len(s_inner)
             
-            # Prova TUTTE le posizioni per questo paziente
+            # Prova tutte le posizioni per questo paziente
             for h in range(m + 2):
                 for k in range(h + 1, m + 3):
                     for v in range(k + 1, m + 4):
@@ -267,10 +195,7 @@ def heuristic_multistart_fast(n, PHOME, HOSP, D, l, e, serv, t_matrix,
             # Altre: casuali
             pazienti = order_randomly(PHOME, seed=run)
         
-        solution, cost, scart = heuristic_fast(
-            n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max,
-            L=L, pazienti_ordinati=pazienti
-        )
+        solution, cost, scart = heuristic_fast(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max,L=L, pazienti_ordinati=pazienti)
         
         if cost < best_cost:
             best_solution = solution

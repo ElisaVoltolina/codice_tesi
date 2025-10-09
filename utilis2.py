@@ -75,18 +75,11 @@ def f_eur2(n,r,Time,iteration,t_matrix, HOSP, D, l, e, alpha=1.0, beta=1.0):
             WP[node]=max(0, t[node_pos]- e[node])
         total_wating_time+= WP[node]
 
-    """#tempo totale di percorrenza (tratte+ attesa +servizio)
-    last_node=r[-1] #ultimo nodo della sequenza
-    last_node_pos=r.index(last_node)
-    total_travel_time=t[last_node_pos]"""
 
     #tempo totale delle tratte
     total_time = 0
     for i in range(len(r) - 1):
         total_time += t_matrix[r[i]][r[i+1]]
-
-
-    
 
     #costo totale della sequenza
     total_cost= alpha * total_wating_time + beta* total_time
@@ -94,58 +87,29 @@ def f_eur2(n,r,Time,iteration,t_matrix, HOSP, D, l, e, alpha=1.0, beta=1.0):
 
 
 
-"""def f_eur3():
-"""
-
-
 
 #verifico se soluzione è feasible
 def feasible(r, serv, t_matrix,T, n, e , l, P, D, q, Q_max, debug=None):
     """ r è la sequenza che volgiamo verificae se è feasible
-    t è la matrice dei tempi
+    t_matrix è la matrice dei tempi
     t_j è l'orario di arrivo al nodo
     T orario massimo
     e, l sono inizio e fine delle finestre temporali
+    serv tempi di servizio a ogni nodo
+    q carico per ogni nodo
     """
     m=len(r)
     t=np.zeros(m+1)
     Q=np.zeros(m+1)
     ld={}
-    #DEBAG
-    for node in r:
-        if node in D:  # Se è un delivery
-            pickup_node = node - n
-            if pickup_node not in r:
-                if debug:
-                    print(f"ERRORE: Delivery {node} senza pickup {pickup_node}")
-                return False, None
-    # Verifica ordine pickup-delivery per ogni richiesta
-    requests_in_route = set()
-    for node in r:
-        if node in P:
-            requests_in_route.add(node)
     
-    for req in requests_in_route:
-        pickup_pos = r.index(req)
-        delivery_pos = r.index(req + n)
-        if pickup_pos >= delivery_pos:
-            if debug:
-                print(f"ERRORE: Pickup {req} (pos {pickup_pos}) non precede delivery {req+n} (pos {delivery_pos})")
-            return False, None
-#fine debag
-
-
-
     for j in range(m): #su tussi i nodi in r in {0,...,m-1} indici dei nodo nella sequenza r  FORSE QUI DOVREI ESCLUDERE LO ZERO VEDI COSA SUCCEDE
         
         #calcolo tempo di arrivo ai nodi nella sequenza r
         t[0]=0 #se il primo nodo è sempre il depositi faccio partire il tempo da zero (posso no mettere 0 ma tipo le sei del mattino pensando che il pulmino parta a quell)
         prev_node = r[j-1] if j > 1 else 0
         curr_node=r[j]
-        
-        #if j>0:   qui è senza tempo di servizio
-            #t[j]= max(t[j-1], e[prev_node])+t_matrix[prev_node][curr_node] #tempo di arrivo del j-esimo n odo in r
-        
+       
         
         if j>0:
             t[j]= max(t[j-1] , e[prev_node])+ serv[prev_node]+t_matrix[prev_node][curr_node]  #PROVO AGGIUNGERE TEMPO DI SERVIZIO 
@@ -185,7 +149,8 @@ def feasible(r, serv, t_matrix,T, n, e , l, P, D, q, Q_max, debug=None):
 #definisco la funzione costo finale
 def C(n,r,t,t_matrix, HOSP, D, l, e, scart, alpha=1.0, beta=1.0):
     """r è la sequenza che volgio valutare
-    t è il loro tempo di arrivo
+    t è il tempo di arrivo ai nodi
+    scart: insieme pazienti scartati
     """
     #calcolo la somam del tempo di attesa ai nodi ospedali
     
@@ -200,10 +165,7 @@ def C(n,r,t,t_matrix, HOSP, D, l, e, scart, alpha=1.0, beta=1.0):
             WP[node]=max(0, t[node_pos]- e[node])
         total_wating_time+= WP[node]
 
-    """#tempo totale di percorrenza (tratte+ attesa +servizio)
-    last_node=r[-1] #ultimo nodo della sequenza
-    last_node_pos=r.index(last_node)
-    total_travel_time=t[last_node_pos]"""
+    
 
     #tempo totale delle tratte
     total_time = 0
@@ -219,161 +181,129 @@ def C(n,r,t,t_matrix, HOSP, D, l, e, scart, alpha=1.0, beta=1.0):
 
 
 
-def order_patients_by_flexibility(PHOME,n, e, l, t_matrix):
-    """Ordina i pazienti per flessibilità (ampiezza time window)"""
+def order_patients_by_flexibility(PHOME, n, e, l, t_matrix):
+    """Ordina i pazienti per flessibilità delle time window dei nodi casa"""
     flexibility = {}
     for i in PHOME:
-        # Calcola flessibilità come ampiezza time window
-        pickup_flexibility = l[i] - e[i]
-        delivery_flexibility = l[i+n] - e[i+n]
-        outbound_flexibility = l[i+n//2] - e[i+n//2]
-        inbound_flexibility = l[i+3*n//2] - e[i+3*n//2]
+        # Solo nodi casa
+        pickup_home_flex = l[i] - e[i]
+        delivery_home_flex = l[i+3*n//2] - e[i+3*n//2]
         
-        # Media delle flessibilità
-        avg_flexibility = (pickup_flexibility + delivery_flexibility + 
-                         outbound_flexibility + inbound_flexibility) / 4
+        avg_flexibility = (pickup_home_flex + delivery_home_flex) / 2
         flexibility[i] = avg_flexibility
     
-    # Ordina per flessibilità decrescente (più flessibili prima)  sorted(PHOME, key=lambda x: flexibility[x], reverse=True)
-    #meno flessibili prima
-    return sorted(PHOME, key=lambda x: flexibility[x])
-
-
-
-def debug_first_patient(paziente_id, n, serv, t_matrix, T, e, l, P, D, q, Q_max):
-    """Debug per capire perché il primo paziente non è inseribile"""
-    
-    print(f"\n{'='*60}")
-    print(f"🔍 DEBUG PAZIENTE {paziente_id}")
-    print(f"{'='*60}")
-    
-    # Nodi associati
-    pickup_Out = paziente_id
-    delivery_Out = paziente_id + n
-    pickup_In = paziente_id + n//2
-    delivery_In = paziente_id + 3*n//2
-    
-    print(f"\nNodi della richiesta:")
-    print(f"  Pickup outbound:   {pickup_Out}")
-    print(f"  Delivery outbound: {delivery_Out}")
-    print(f"  Pckup Inbound: {pickup_In}")
-    print(f"  Delivery Inbound:  {delivery_In}")
-    
-    # Time windows
-    print(f"\nTime Windows:")
-    print(f"  Pickup Outbound:   [{e[pickup_Out]:.2f} - {l[pickup_Out]:.2f}] (ampiezza: {l[pickup_Out]-e[pickup_Out]:.2f})")
-    print(f"  Delivery Outbound: [{e[delivery_Out]:.2f} - {l[delivery_Out]:.2f}] (ampiezza: {l[delivery_Out]-e[delivery_Out]:.2f})")
-    print(f"  Pickup Inbound: [{e[pickup_In]:.2f} - {l[pickup_In]:.2f}] (ampiezza: {l[pickup_In]-e[pickup_In]:.2f})")
-    print(f"  Delivery Inbound:  [{e[delivery_In]:.2f} - {l[delivery_In]:.2f}] (ampiezza: {l[delivery_In]-e[delivery_In]:.2f})")
-    
-    # Tempi di viaggio
-    print(f"\nTempi di viaggio:")
-    print(f"  Deposito → Pickup Outbound:     {t_matrix[0][pickup_Out]:.2f}")
-    print(f"  Pickup Outbound → Delivery Outbound:     {t_matrix[pickup_Out][delivery_Out]:.2f}")
-    print(f"  Delivery Outbound → Pickup Inbound:   {t_matrix[delivery_Out][pickup_In]:.2f}")
-    print(f"  Pickup Inbound → Delivery Inbound:    {t_matrix[pickup_In][delivery_In]:.2f}")
-    print(f"  Delivery Inbound → Deposito:    {t_matrix[delivery_In][2*n+1]:.2f}")
-    
-    # Tempi di servizio
-    print(f"\nTempi di servizio:")
-    print(f"  Pickup Outbound:   {serv[pickup_Out]:.2f}")
-    print(f"  Delivery Outbound: {serv[delivery_Out]:.2f}")
-    print(f"  Pickup Inbound: {serv[pickup_In]:.2f}")
-    print(f"  Delivery Inbound:  {serv[delivery_In]:.2f}")
-    
-    # Ride time massimo
-    print(f"\nRide time massimo: {T[paziente_id]:.2f}")
-    
-    # Carico
-    print(f"\nCarico:")
-    print(f"  Pickup Outbound:   {q[pickup_Out]}")
-    print(f"  Delivery Outbound: {q[delivery_Out]}")
-    print(f"  Pickup Inbound:   {q[pickup_In]}")
-    print(f"  Delivery Outbound: {q[delivery_In]}")
-    print(f"  Capacità max: {Q_max}")
-    
-    # Verifica sequenza più semplice
-    print(f"\n{'='*60}")
-    print(f"TEST: Sequenza più semplice [0, p_o, d_o, p_in, d_in, 2n+1]")
-    print(f"{'='*60}")
-    
-    simple_route = [0, pickup_Out, delivery_Out, pickup_In, delivery_In, 2*n+1]
-    print(f"Route: {simple_route}")
-    
-    # Simula calcolo tempi passo-passo
-    t = np.zeros(len(simple_route))
-    t[0] = 0
-    
-    for j in range(1, len(simple_route)):
-        prev_node = simple_route[j-1]
-        curr_node = simple_route[j]
-        
-        arrival = max(t[j-1], e[prev_node]) + serv[prev_node] + t_matrix[prev_node][curr_node]
-        t[j] = max(arrival, e[curr_node])
-        
-        print(f"\nNodo {curr_node}:")
-        print(f"  Arrivo:        {arrival:.2f}")
-        print(f"  Inizio serv:   {t[j]:.2f}")
-        print(f"  Time window:   [{e[curr_node]:.2f} - {l[curr_node]:.2f}]")
-        
-        if arrival > l[curr_node]:
-            print(f"  ❌ VIOLAZIONE: arrivo {arrival:.2f} > chiusura {l[curr_node]:.2f}")
-            print(f"     Tempo mancante: {arrival - l[curr_node]:.2f}")
-            
-            # Analizza da dove viene il ritardo
-            if j > 1:
-                print(f"     Breakdown:")
-                print(f"       - Tempo al nodo prec: {t[j-1]:.2f}")
-                print(f"       - Apertura nodo prec: {e[prev_node]:.2f}")
-                print(f"       - Tempo servizio:     {serv[prev_node]:.2f}")
-                print(f"       - Tempo viaggio:      {t_matrix[prev_node][curr_node]:.2f}")
-        elif t[j] > l[curr_node]:
-            print(f"  ❌ VIOLAZIONE: inizio servizio {t[j]:.2f} > chiusura {l[curr_node]:.2f}")
-        else:
-            print(f"  ✅ OK")
-    
-    # Verifica ride time
-    print(f"\n{'='*60}")
-    print(f"VERIFICA RIDE TIME")
-    print(f"{'='*60}")
-    
-    pickup_idx = simple_route.index(pickup_Out)
-    delivery_idx = simple_route.index(delivery_Out)
-    
-    ride_time = t[delivery_idx] - (max(t[pickup_idx], e[pickup_Out]) + serv[pickup_Out])
-    print(f"Ride time: {ride_time:.2f}")
-    print(f"Massimo:   {T[paziente_id]:.2f}")
-    
-    if ride_time > T[paziente_id]:
-        print(f"❌ VIOLAZIONE: ride time {ride_time:.2f} > max {T[paziente_id]:.2f}")
-        print(f"   Eccesso: {ride_time - T[paziente_id]:.2f}")
-    else:
-        print(f"✅ OK")
-    
-    # Verifica capacità
-    print(f"\n{'='*60}")
-    print(f"VERIFICA CAPACITÀ")
-    print(f"{'='*60}")
-    
-    Q_curr = 0
-    for node in simple_route:
-        Q_curr += q[node]
-        print(f"Dopo nodo {node}: carico = {Q_curr} / {Q_max}")
-        if Q_curr < 0 or Q_curr > Q_max:
-            print(f"❌ VIOLAZIONE CAPACITÀ")
-    
-    print(f"\n{'='*60}")
-    
-    # Testa con feasible()
-    is_feas, times = feasible(simple_route, serv, t_matrix, T, n, e, l, P, D, q, Q_max, debug=True)
-    print(f"\nRisultato feasible(): {is_feas}")
-
+    # Ordina: meno flessibili prima /con vederse->dopo
+    return sorted(PHOME, key=lambda x: flexibility[x], reverse= True)
 
 
 
 def order_randomly(PHOME, seed=42):
-    """Ordine casuale per esplorare soluzioni diverse"""
+    """Ordine casuale """
     random.seed(seed)
     shuffled = list(PHOME)
     random.shuffle(shuffled)
     return shuffled
+
+
+def feasible_fast(r, serv, t_matrix, T, n, e, l, P, D, q, Q_max):
+    """
+    Versione di feasible con EARLY EXIT (si ferma appena trova una violazione)
+    """
+    m = len(r)
+
+    pickup_positions = {}
+    delivery_positions = {}
+    
+    for idx, node in enumerate(r):
+        if node in P:
+            pickup_positions[node] = idx
+        elif node in D:
+            delivery_positions[node] = idx
+    
+    # CONTROLLO 2: Capacità e tempi (insieme, un solo loop)
+    t = np.zeros(m)   #t[j] tempod i arrivo al nodo j
+    Q = np.zeros(m)   #Q[j] carico dopo aver visitato nodo j
+    ld = {}
+    
+    Q[0] = 0 
+    t[0] = 0
+    
+    for j in range(1, m):
+        prev_node = r[j-1]
+        curr_node = r[j]
+        
+        # Calcola tempo arrivo
+        t[j] = max(t[j-1], e[prev_node]) + serv[prev_node] + t_matrix[prev_node][curr_node]
+        
+        # EARLY EXIT: Violazione time window
+        if t[j] > l[curr_node]:
+            return False, None
+        
+        # Calcola carico
+        Q[j] = Q[j-1] + q[curr_node]
+        
+        # EARLY EXIT: Violazione capacità
+        if Q[j] < 0 or Q[j] > Q_max:
+            return False, None
+    
+    # CONTROLLO 3: Ride time (solo per delivery nodes)
+    for p_node in pickup_positions.keys():
+        d_node = p_node + n
+        
+        pickup_pos = pickup_positions[p_node]
+        delivery_pos = delivery_positions[d_node]
+        
+        ld[d_node] = min(l[d_node], max(t[pickup_pos], e[p_node]) + serv[p_node] + T[p_node]) #ultimo orario possibile per il delivery
+        
+        # EARLY EXIT: Violazione ride time
+        if t[delivery_pos] > ld[d_node]:
+            return False, None
+    
+    return True, t
+
+
+
+
+
+def order_biased_random(PHOME, n, e, l, t_matrix, seed=42):
+    """
+    Ordinamento casuale pesato dalla flessibilità:
+    - solo nodi casa (gli ospedali hanno sempre 60 min)
+    - Pazienti con time window strette nei rispettivi nodi casa sono più critici
+    """
+    import random
+    random.seed(seed)
+    
+    # Calcola flessibilità SOLO per nodi casa
+    flexibility = {}
+    for i in PHOME:
+        # PICKUP OUTBOUND (casa-ospedale)
+        pickup_home_flex = l[i] - e[i]  
+        
+        # DELIVERY INBOUND (ospedale-casa)  
+        delivery_home_flex = l[i+3*n//2] - e[i+3*n//2]  
+        
+        # non considero i nodi ospedale (i+n e i+n//2) perché sempre 60 min
+        
+        # Media 
+        avg_flexibility = (pickup_home_flex + delivery_home_flex) / 2
+        flexibility[i] = avg_flexibility
+    
+    # Calcola "peso" per ogni paziente
+    max_flex = max(flexibility.values())
+    weights = {}
+    for i in PHOME:
+        # Meno flessibile → peso alto
+        weights[i] = max_flex - flexibility[i] + 1
+    
+    # Estrai pazienti uno alla volta con probabilità proporzionale al peso
+    ordered = []
+    remaining = list(PHOME)
+    
+    while remaining:
+        current_weights = [weights[p] for p in remaining]
+        chosen = random.choices(remaining, weights=current_weights, k=1)[0]
+        ordered.append(chosen)
+        remaining.remove(chosen)
+    #con reverse meno flessiili dopo
+    return ordered.reverse()

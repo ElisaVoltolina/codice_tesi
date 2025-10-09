@@ -3,8 +3,8 @@ import time
 import os
 
 from readREAL import extract_darp_data
-from euristica import*
-from test import*
+from euristica_no_scart import*
+
 
 
 def load_exact_results(exact_csv):
@@ -43,7 +43,8 @@ def load_heuristic_results(exact_csv):
                 'num_richieste': int(row['num_richieste']),
                 'richieste_servite': float(row['richieste_servite_euristica']),
                 'tempo_sec': float(row['tempo_sec_euristica']),
-                'valore_ottimo': float(row['valore_ottimo_euristica'])
+                'valore_ottimo': float(row['valore_ottimo_euristica']),
+                'num_run': int(row['num_run'])
             }
     return heuristic_data
 
@@ -82,7 +83,8 @@ def confronto(instances_folder="router_bus_main\DATI", exact_results="risultati/
             'richieste_servite_heuristic',
             'valore_ottimo_heuristic',
             'gap_heuristic',
-            'tempo_heuristic'
+            'tempo_heuristic',
+            'numero_run'
         ]
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
@@ -116,15 +118,11 @@ def confronto(instances_folder="router_bus_main\DATI", exact_results="risultati/
                     'richieste_servite_heuristic': heuristic['richieste_servite'],
                     'valore_ottimo_heuristic': heuristic['valore_ottimo'],
                     'gap_heuristic': gap_euristica,
-                    'tempo_heuristic': heuristic['tempo_sec']})
+                    'tempo_heuristic': heuristic['tempo_sec'],
+                    'numero_run': heuristic['num_run']})
             else:
                 print(f" Attenzione: istanza {filename} non trovata nei risultati euristici")
 
-
-
-
-        
-                
 
 
 
@@ -157,7 +155,7 @@ def test(instances_folder="router_bus_main/DATI", output_csv="risultati/risultat
 
                 #esecuzione euristica
                 start_time = time.time() #faccio partire il tempo prima di avviare la risoluzione del modello
-                best_Solution, best_cost, best_scart=heuristic_multistart_fast(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, num_runs=5, L=5)
+                best_Solution, best_cost, best_scart, num_run=heuristic_multirun(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, time_limit=60)
                 end_time = time.time() #stop tempo
                 timetot = end_time - start_time #calcolo tempo di esecuzione
                 
@@ -173,15 +171,16 @@ def test(instances_folder="router_bus_main/DATI", output_csv="risultati/risultat
                     n,  #numero totale delle richieste (outbound+ inbound)
                     richieste_servite_euristica, #numero richiest eservie euristica
                     round(timetot, 2),  #tempo esecuzione euristica
-                    round(best_cost, 2)  #valore ottimo trovato + penalità esclusione pazienti
+                    round(best_cost, 2),  #valore ottimo trovato + penalità esclusione pazienti
+                    num_run #numero di run eseguite entro il tempo limite
                 ])
                 
 
 
 def main():
     print("Avvio test su tutte le istanze...")
-    #test(instances_folder="router_bus_main/DATI2",output_csv="risultati/risultati_EuristicFast2.csv")
-    confronto(instances_folder="router_bus_main\DATI2", exact_results="risultati/risultati_penality_DATI60.csv", heuristic_result="risultati/risultati_EuristicFast2.csv", output_csv="risultati/risultati_confronto600s2.csv")
+    #test(instances_folder="router_bus_main/DATI",output_csv="risultati/Euristic_timelimit60L5.csv")
+    confronto(instances_folder="router_bus_main\DATI", exact_results="risultati/risultati_penality_DATI60.csv", heuristic_result="risultati/Euristic_timelimit_div_60L5.csv", output_csv="risultati/confronto_timelimit_div_60L5.csv")
     #print("\nTest completati!")
     print("Confronto eseguito")
 

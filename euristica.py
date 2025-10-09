@@ -2,7 +2,7 @@ from utilis2 import*
 from readREAL import extract_darp_data
 import random
 
-
+#euristica con reinserimento dei pazienti
 def heuristic(n,PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, alpha=1.0, beta=1.0,L=5, pazienti_ordinati= None):
     """
     Algoritmo euristico per la schedulazione di pazienti con reinserimento degli scartati.
@@ -122,7 +122,7 @@ def heuristic(n,PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, alpha=1.0,
     ultima_iterazione = len(pazienti_ordinati)
     
     
-    for s in S[n//2]:
+    for s in S[n//2]:  #nooooo
         """#DEBAG
         key = tuple(s)
         if key not in Time[ultima_iterazione]:
