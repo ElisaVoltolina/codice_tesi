@@ -213,13 +213,7 @@ def feasible_fast(r, serv, t_matrix, T, n, e, l, P, D, q, Q_max):
 
     pickup_positions = {}
     delivery_positions = {}
-    
-    for idx, node in enumerate(r):
-        if node in P:
-            pickup_positions[node] = idx
-        elif node in D:
-            delivery_positions[node] = idx
-    
+
     # CONTROLLO 2: Capacità e tempi (insieme, un solo loop)
     t = np.zeros(m)   #t[j] tempod i arrivo al nodo j
     Q = np.zeros(m)   #Q[j] carico dopo aver visitato nodo j
@@ -263,47 +257,72 @@ def feasible_fast(r, serv, t_matrix, T, n, e, l, P, D, q, Q_max):
 
 
 
+def feasible_fast_order(r, serv, t_matrix, T, n, e, l, P, PHOME, D, q, Q_max):
+    """
+    Versione di feasible con EARLY EXIT (si ferma appena trova una violazione)
+    """
+    m = len(r)
+
+    pickup_positions = {}
+    delivery_positions = {}
+    
+    #CONTROLLO PRECEDENZE
+    for idx, node in enumerate(r):
+        if node in P:
+            pickup_positions[node] = idx
+        elif node in D:
+            delivery_positions[node] = idx
+            pickup_node = node - n
+            if pickup_positions[pickup_node] >= idx:   #controllo che ogni pickup venga prima del rispettivo delivery
+                return False, None
+
+    for node in filter(lambda x: x in r, PHOME): #qui devo fare entrambi
+        delivery_out= node+n
+        pickup_in= node + n//2
+        if pickup_positions[pickup_in]<=delivery_positions[delivery_out]: #controllo che il delivery-outbound sia prima del pickup-inbound
+            print(f" Pickup-inbound {node + n//2} precede delivery {node+n} ")
+            return False, None
+    print(pickup_positions, delivery_positions)
+    
+    # CONTROLLO 2: Capacità e tempi (insieme, un solo loop)
+    t = np.zeros(m)   #t[j] tempod i arrivo al nodo j
+    Q = np.zeros(m)   #Q[j] carico dopo aver visitato nodo j
+    ld = {}
+    
+    Q[0] = 0 
+    t[0] = 0
+    
+    for j in range(1, m):
+        prev_node = r[j-1]
+        curr_node = r[j]
+        
+        # Calcola tempo arrivo
+        t[j] = max(t[j-1], e[prev_node]) + serv[prev_node] + t_matrix[prev_node][curr_node]
+        
+        # EARLY EXIT: Violazione time window
+        if t[j] > l[curr_node]:
+            return False, None
+        
+        # Calcola carico
+        Q[j] = Q[j-1] + q[curr_node]
+        
+        # EARLY EXIT: Violazione capacità
+        if Q[j] < 0 or Q[j] > Q_max:
+            return False, None
+    
+    # CONTROLLO 3: Ride time (solo per delivery nodes)
+    for p_node in pickup_positions.keys():
+        d_node = p_node + n
+        
+        pickup_pos = pickup_positions[p_node]
+        delivery_pos = delivery_positions[d_node]
+        
+        ld[d_node] = min(l[d_node], max(t[pickup_pos], e[p_node]) + serv[p_node] + T[p_node]) #ultimo orario possibile per il delivery
+        
+        # EARLY EXIT: Violazione ride time
+        if t[delivery_pos] > ld[d_node]:
+            return False, None
+    
+    return True, t
 
 
-def order_biased_random(PHOME, n, e, l, t_matrix, seed=42):
-    """
-    Ordinamento casuale pesato dalla flessibilità:
-    - solo nodi casa (gli ospedali hanno sempre 60 min)
-    - Pazienti con time window strette nei rispettivi nodi casa sono più critici
-    """
-    import random
-    random.seed(seed)
-    
-    # Calcola flessibilità SOLO per nodi casa
-    flexibility = {}
-    for i in PHOME:
-        # PICKUP OUTBOUND (casa-ospedale)
-        pickup_home_flex = l[i] - e[i]  
-        
-        # DELIVERY INBOUND (ospedale-casa)  
-        delivery_home_flex = l[i+3*n//2] - e[i+3*n//2]  
-        
-        # non considero i nodi ospedale (i+n e i+n//2) perché sempre 60 min
-        
-        # Media 
-        avg_flexibility = (pickup_home_flex + delivery_home_flex) / 2
-        flexibility[i] = avg_flexibility
-    
-    # Calcola "peso" per ogni paziente
-    max_flex = max(flexibility.values())
-    weights = {}
-    for i in PHOME:
-        # Meno flessibile → peso alto
-        weights[i] = max_flex - flexibility[i] + 1
-    
-    # Estrai pazienti uno alla volta con probabilità proporzionale al peso
-    ordered = []
-    remaining = list(PHOME)
-    
-    while remaining:
-        current_weights = [weights[p] for p in remaining]
-        chosen = random.choices(remaining, weights=current_weights, k=1)[0]
-        ordered.append(chosen)
-        remaining.remove(chosen)
-    #con reverse meno flessiili dopo
-    return ordered.reverse()
