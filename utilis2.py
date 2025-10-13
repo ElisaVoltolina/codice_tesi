@@ -326,3 +326,73 @@ def feasible_fast_order(r, serv, t_matrix, T, n, e, l, P, PHOME, D, q, Q_max):
     return True, t
 
 
+
+def order_biased_random(PHOME, n, e, l, t_matrix, seed=42):
+ """
+
+    Ordinamento casuale pesato dalla flessibilità:
+
+    - solo nodi casa (gli ospedali hanno sempre 60 min)
+
+    - Pazienti con time window strette nei rispettivi nodi casa sono più critici
+
+    """
+
+    
+
+    random.seed(seed)
+
+    # Calcola flessibilità SOLO per nodi casa
+
+    flexibility = {}
+
+    for i in PHOME:
+
+        # PICKUP OUTBOUND (casa-ospedale)
+
+        pickup_home_flex = l[i] - e[i]  
+
+        # DELIVERY INBOUND (ospedale-casa)  
+
+        delivery_home_flex = l[i+3*n//2] - e[i+3*n//2]  
+
+        # non considero i nodi ospedale (i+n e i+n//2) perché sempre 60 min
+
+        # Media
+
+        avg_flexibility = (pickup_home_flex + delivery_home_flex) / 2
+
+        flexibility[i] = avg_flexibility
+
+    # Calcola "peso" per ogni paziente
+
+    max_flex = max(flexibility.values())
+
+    weights = {}
+
+    for i in PHOME:
+
+        # Meno flessibile → peso alto
+
+        weights[i] = max_flex - flexibility[i] + 1
+
+    # Estrai pazienti uno alla volta con probabilità proporzionale al peso
+
+    ordered = []
+
+    remaining = list(PHOME)
+
+    while remaining:
+
+        current_weights = [weights[p] for p in remaining]
+
+        chosen = random.choices(remaining, weights=current_weights, k=1)[0]
+
+        ordered.append(chosen)
+
+        remaining.remove(chosen)
+
+    #con reverse meno flessiili dopo
+
+    return ordered.reverse()
+
