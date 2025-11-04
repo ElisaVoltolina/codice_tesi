@@ -63,7 +63,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     # Big-M calculation
     M = {}
     for i, j in idx:
-        M[i,j] = max(0, l[i] + s[i] + t[i][j] - e[j]) + 1000  # Aggiungo un margine di sicurezza
+        M[i,j] = max(0, l[i] + s[i] + t[i][j] - e[j]) #+ 1000  # Aggiungo un margine di sicurezza  QUI HO CAMBIATO
 
    
     # Tempo di arrivo e inizio servizio
@@ -72,6 +72,10 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     model.addConstrs((A[j] >= B[i] + s[i] + t[i][j] - M[i,j] * (1 - x[i, j]) for i,j in idx ), name="tempo_arrivoA") 
      
      
+
+
+    """#PRODIAMO Ad ALLEGGERIRE QUESTA PARTE
+
     # Variabile binaria per determinare se A[i] è all'interno della finestra temporale
     # Se in_window[i] = 1, allora B[i] = A[i]
     # Se in_window[i] = 0, allora B[i] = e[i]
@@ -117,9 +121,30 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
             #model.addGenConstrIndicator(y[i-n], False, A[i] == 0, name=f"reset_A_delivery_non_servito_{i}")
             #model.addGenConstrIndicator(y[i-n], False, B[i] == 0, name=f"reset_B_delivery_non_servito_{i}")
     
-   #se imposto a zero quando non servita diventa infattibile PERCHè
+   #se imposto a zero quando non servita diventa infattibile PERCHè"""
+    
+    
+    # VINCOLI TEMPORALI 
 
-   
+    # 1. PROPAGAZIONE TEMPORALE tra nodi consecutivi
+    for i, j in idx:
+        model.addConstr(
+            A[j] >= B[i] + s[i] + t[i][j] - M[i,j] * (1 - x[i,j]), 
+            name=f"tempo_arrivo_{i}_{j}"
+        )
+
+    # 2. B >= A sempre (inizio servizio dopo arrivo)
+    model.addConstrs((B[i] >= A[i] for i in V), name="B_dopo_A")
+
+    # 3. TIME WINDOWS - Vincoli base per TUTTI i nodi
+    model.addConstrs((B[i] >= e[i] for i in V), name="timewindow_early")
+    model.addConstrs((B[i] <= l[i] for i in V), name="timewindow_late")
+
+
+
+
+
+
 
    
     # Ride time (solo per richieste servite)
@@ -134,9 +159,9 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
 
 
 
-    # Time window    (qui non serve disattivarli)
+    """# Time window    (QUESTI SONO SUPERFLUI PENSO)
     model.addConstrs((B[i] >= e[i] for i in V), name="timewindow1")
-    model.addConstrs((B[i] <= l[i] for i in V), name="timewindow2")  
+    model.addConstrs((B[i] <= l[i] for i in V), name="timewindow2")"""  
 
 
 
@@ -171,8 +196,6 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     
 
 
-    #Valid inequality
-
     # Eliminazione subtour (# Metodo Miller-Tucker-Zemlin)
     u = model.addVars(V, vtype=GRB.CONTINUOUS, name="u")
     model.addConstrs((u[i] >= 1 for i in V if i != 0 and i != 2*n+1), name="u_lb")
@@ -186,6 +209,8 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
             model.addConstr(u[j] >= u[i] + 1 - (2*n+1) * (1 - x[i, j]), name=f"subtour_{i}_{j}")
 
 
+
+    #VALID INEQUALITIES
 
     #aggiunta di nuove valid inequalities
     if use_valid_inequalities:

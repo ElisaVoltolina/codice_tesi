@@ -31,27 +31,7 @@ T=darp_data['T']
 #euristic_route, _ , _ =heuristic(n,PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, alpha=1.0, beta=1.0,L=5, pazienti_ordinati= None)
 #proviamo a dare il risulatato della multi run con limite un minuto
 euristic_route,_,_,_= heuristic_multirun(n, PHOME, HOSP, D, l, e, serv, t_matrix,T, P, q, Q_max, time_limit=60)
-solution= solve_darp(**darp_data, euristic_solution= euristic_route ) #V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q, Q,  penalty_weights=None, use_valid_inequalities=True, vi_config=None)#,  euristic_solution=None)
+solution= solve_darp(**darp_data, euristic_solution= euristic_route )    #con euristic_solution= None non ho nessun mip_start
 
 
 
-
-'''# TEST DIAGNOSTICO
-print("\n" + "="*70)
-print(" ESEGUO TEST DIAGNOSTICO")
-print("="*70)
-
-test_ok = test_mip_start_creation(
-    euristic_route, n, P, D, PD, V, idx, e, l, serv, t_matrix, q, Q_max
-)
-
-if test_ok:
-    print("\n✓ Test superato! Procedo con il modello esatto...")
-    
-    solution = solve_darp(
-        V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, 
-        t_matrix, serv, e, l, T, q, Q_max,
-        euristic_solution=euristic_route
-    )
-else:
-    print("\n✗ Test fallito! NON uso il warm start")'''

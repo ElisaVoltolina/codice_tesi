@@ -127,9 +127,12 @@ def heuristic_multirun(n, PHOME, HOSP, D, l, e, serv, t_matrix,T, P, q, Q_max, t
     run=0
     t=0
     while t < time_limit:
-        
-        #ordinamneto casuale per ogni run
-        pazienti = order_randomly(PHOME, seed=run)
+        if run == 0:
+            # Prima run: ordinamento deterministico per flessibilità
+            pazienti = order_patients_by_flexibility(PHOME, n, e, l, t_matrix)
+        else:
+            #ordinamneto casuale per tutte le altre run
+            pazienti = order_randomly(PHOME, seed=run)
         # Esegui euristica
         solution, cost, scart = heuristic(n,PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, alpha=1.0, beta=1.0,L=5, pazienti_ordinati= pazienti)
         
@@ -184,17 +187,9 @@ def heuristic_multirun1(n, PHOME,HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, 
     return best_solution, best_cost, best_scart, run
 
 
-
-
-
-
-
-
-
-
 if __name__=='__main__':
     #file
-    json_file_path= "router_bus_main/DATI/input_modello_10.json"
+    json_file_path= "router_bus_main/DATI/input_modello_8b.json"
     # estrazione dati
     data_darp= extract_darp_data(json_file_path)
     t_matrix= data_darp['t']
@@ -210,9 +205,27 @@ if __name__=='__main__':
     Q_max=data_darp['Q']
     serv= data_darp['s']
     
-  
-    #migliore_sequenza, miglior_costo, scart=heuristic(n,PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, alpha=1.0, beta=1.0,L=5, pazienti_ordinati= None)
+
+
+
+
+    #pazienti=[5, 2, 4, 1, 3]
+    #migliore_sequenza, miglior_costo, scart=heuristic(n,PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, alpha=1.0, beta=1.0,L=5, pazienti_ordinati= pazienti)
 
     #heriusta con time limit
-    best_solution, best_cost, best_scart, num_run=heuristic_multirun(n, PHOME, HOSP, D, l, e, serv, t_matrix,T, P, q, Q_max, time_limit=60)
+    #best_solution, best_cost, best_scart, num_run=heuristic_multirun(n, PHOME, HOSP, D, l, e, serv, t_matrix,T, P, q, Q_max, time_limit=60)
+    
+
+
+    #prova beam search
+    best_order=beam_search_ordering_balanced(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, beam_width=2, alpha=1.0, beta=1.0)
+    print("il miglior ordinamento trovato è:", best_order)
+
+
+
+#nuova euristica
+
+    #best_sol, best_cost, best_scart=iterated_greedy(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, num_iterations=10, alpha=1.0, beta=1.0, L=5)
+    #print("miglior soluzione:", best_sol, "\n miglior costo:", best_cost, "\n scarti.", best_scart) 
+
     

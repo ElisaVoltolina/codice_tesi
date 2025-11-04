@@ -327,72 +327,348 @@ def feasible_fast_order(r, serv, t_matrix, T, n, e, l, P, PHOME, D, q, Q_max):
 
 
 
+import random
+
 def order_biased_random(PHOME, n, e, l, t_matrix, seed=42):
- """
+    """
+    Ordinamento casuale pesato dalla flessibilità:
+    - solo nodi casa (gli ospedali hanno sempre 60 min)
+    - Pazienti con time window strette nei rispettivi nodi casa sono più critici
+    """
 
-    Ordinamento casuale pesato dalla flessibilità:
+    random.seed(seed)
 
-    - solo nodi casa (gli ospedali hanno sempre 60 min)
+    # Calcola flessibilità SOLO per nodi casa
+    flexibility = {}
+    for i in PHOME:
+        # PICKUP OUTBOUND (casa -> ospedale)
+        pickup_home_flex = l[i] - e[i]
 
-    - Pazienti con time window strette nei rispettivi nodi casa sono più critici
+        # DELIVERY INBOUND (ospedale -> casa)
+        delivery_home_flex = l[i + 3 * n // 2] - e[i + 3 * n // 2]
 
-    """
+        # Media tra pickup e delivery
+        avg_flexibility = (pickup_home_flex + delivery_home_flex) / 2
+        flexibility[i] = avg_flexibility
 
-    
+    # Calcola "peso" per ogni paziente
+    max_flex = max(flexibility.values())
+    weights = {}
 
-    random.seed(seed)
+    for i in PHOME:
+        # Meno flessibile → peso alto
+        weights[i] = max_flex - flexibility[i] + 1
 
-    # Calcola flessibilità SOLO per nodi casa
+    # Estrai pazienti uno alla volta con probabilità proporzionale al peso
+    ordered = []
+    remaining = list(PHOME)
 
-    flexibility = {}
+    while remaining:
+        current_weights = [weights[p] for p in remaining]
+        chosen = random.choices(remaining, weights=current_weights, k=1)[0]
+        ordered.append(chosen)
+        remaining.remove(chosen)
 
-    for i in PHOME:
+    # Se vuoi che i meno flessibili vengano DOPO, inverti l'ordine
+    ordered.reverse()
 
-        # PICKUP OUTBOUND (casa-ospedale)
+    return ordered
 
-        pickup_home_flex = l[i] - e[i]  
 
-        # DELIVERY INBOUND (ospedale-casa)  
 
-        delivery_home_flex = l[i+3*n//2] - e[i+3*n//2]  
 
-        # non considero i nodi ospedale (i+n e i+n//2) perché sempre 60 min
+#search method
+def beam_search_ordering(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, beam_width=3):
+    """
+    Beam search: core= numero di sequenze feasible + flessibilità.
+    """
+    
+    # Calcola flessibilità (in caso di parità di numero di sequanze uso la flessibilità)
+    flexibility = {}
+    for i in PHOME:
+        pickup_home_flex = l[i] - e[i]
+        delivery_home_flex = l[i+3*n//2] - e[i+3*n//2]
+        flexibility[i] = (pickup_home_flex + delivery_home_flex) / 2
+    
+    beams = [{
+        'order': [],
+        'remaining': set(PHOME),
+        'S': [[0, 2*n+1]]
+    }]
+    
+    for step in range(len(PHOME)): #uno step per ogni pazinete
+        print(f"\nStep {step+1}/{len(PHOME)}")
+        
+        all_candidates = []
+        
+        for beam in beams:
+            
+            for paziente in beam['remaining']:  #pazienti ancora da inserire
+                new_S = []
+                seen = set()
+                
+                for s in beam['S']:
+                    s_middle = s[1:-1]
+                    m= len(s_middle)
+                    max_h=m+1
+                    
+                    for h in range(max_h):
+                        for k in range(h + 1, m + 2):
+                            for v in range(k + 1, m + 3):
+                                for w in range(v + 1, m + 4):
+                                    r = Insert(s, n, paziente, h, k, v, w)
+                                    r_tuple = tuple(r)
+                                    
+                                    if r_tuple not in seen:
+                                        ok, _ = feasible(r, serv, t_matrix, T, n, e, l, P, D, q, Q_max, debug=None)
+                                        if ok:
+                                            new_S.append(r)
+                                            seen.add(r_tuple)
+                
+                if len(new_S) == 0:
+                    new_S = beam['S']
+            
+                # Tupla: (num_sequenze, -flessibilità)
+                # Se parità su num_sequenze, usa flessibilità 
+                score = (len(new_S), -flexibility[paziente])
+                
+                all_candidates.append({
+                    'order': beam['order'] + [paziente],
+                    'remaining': beam['remaining'] - {paziente},
+                    'S': new_S,
+                    'score': score
+                })
+                
+                print(f"    + {paziente}: {len(new_S)} seq, flex={flexibility[paziente]:.1f}")
+        
+        # Ordina per tupla: prima per num_seq, poi per flessibilità
+        all_candidates.sort(key=lambda x: x['score'], reverse=True)
+        beams = all_candidates[:beam_width]
+        
+        print(f"\n   Top {beam_width}:")
+        for i, b in enumerate(beams):
+            print(f"    {i+1}. {b['order']} → score={b['score']}")
+    
+    best = max(beams, key=lambda x: x['score'])
+    print(f"\n Ordine: {best['order']}")
+    
+    return best['order']
 
-        # Media
 
-        avg_flexibility = (pickup_home_flex + delivery_home_flex) / 2
 
-        flexibility[i] = avg_flexibility
 
-    # Calcola "peso" per ogni paziente
+def beam_search_ordering_smart(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, 
+                               beam_width=3, alpha=1.0, beta=1.0):
+    """
+    Beam search che valuta qualità con f_eur:
+    - Calcola Time solo per valutazione
+    - non salva tutto Time (troppo pesante)
+    - Salva solo i costi delle sequenze
+    """
 
-    max_flex = max(flexibility.values())
+    
+    # Calcola flessibilità per tiebreak
+    flexibility = {}
+    for i in PHOME:
+        pickup_flex = l[i] - e[i]
+        delivery_flex = l[i+3*n//2] - e[i+3*n//2]
+        flexibility[i] = (pickup_flex + delivery_flex) / 2
+    
+    beams = [{
+        'order': [],
+        'remaining': set(PHOME),
+        'S': [[0, 2*n+1]],
+        'seq_costs': {tuple([0, 2*n+1]): 0.0}  # Costo di ogni sequenza
+    }]
+    
+    for step in range(len(PHOME)):
+        print(f"\nStep {step+1}/{len(PHOME)}")
+        all_candidates = []
+        
+        for beam in beams:
+            print(f"  Espando beam {beam['order']}...")
+            
+            for paziente in beam['remaining']:
+                new_S = []
+                new_seq_costs = {}  # Solo costi, non Time completo!
+                seen = set()
+                
+                for s in beam['S']:
+                    s_middle = s[1:-1]
+                    
+                    for h in range(len(s_middle) + 1):
+                        for k in range(h + 1, len(s_middle) + 2):
+                            for v in range(k + 1, len(s_middle) + 3):
+                                for w in range(v + 1, len(s_middle) + 4):
+                                    r = Insert(s, n, paziente, h, k, v, w)
+                                    r_tuple = tuple(r)
+                                    
+                                    if r_tuple not in seen:
+                                        ok, t = feasible(r, serv, t_matrix, T, n, e, l, 
+                                                       P, D, q, Q_max, debug=None)
+                                        if ok:
+                                            # Calcola costo con f_eur2_inline
+                                            # (usa t appena calcolato, ma NON lo salva!)
+                                            cost = f_eur2_inline(n, r, t, t_matrix, HOSP, D, l, e, alpha, beta)
+                                            
+                                            new_S.append(r)
+                                            new_seq_costs[r_tuple] = cost  # Salva solo il costo
+                                            seen.add(r_tuple)
+                
+                if len(new_S) == 0:
+                    new_S = beam['S']
+                    new_seq_costs = beam['seq_costs']
+                
+                # Score con qualità delle sequenze
+                if len(new_S) > 0:
+                    # Media dei costi (più basso = meglio)
+                    avg_cost = sum(new_seq_costs.values()) / len(new_seq_costs)
 
-    weights = {}
 
-    for i in PHOME:
+                    # Score: (num_sequenze, -avg_cost, -flessibilità)
+                    # Più sequenze = meglio, costo basso = meglio   QUI POTREI PROVARE A INVERTIRE L'ORDINE
+                    score = (len(new_S), -avg_cost, -flexibility[paziente])
+                else:
+                    score = (0, 0, 0)
+                
+                all_candidates.append({
+                    'order': beam['order'] + [paziente],
+                    'remaining': beam['remaining'] - {paziente},
+                    'S': new_S,
+                    'seq_costs': new_seq_costs,
+                    'score': score
+                })
+                
+                print(f"    + {paziente}: {len(new_S)} seq, avg_cost={-score[1]:.1f}")
+        
+        all_candidates.sort(key=lambda x: x['score'], reverse=True)
+        beams = all_candidates[:beam_width]
+        
+        print(f"\n Top {beam_width}:")
+        for i, b in enumerate(beams):
+            print(f"    {i+1}. {b['order']} → {b['score'][0]} seq, cost={-b['score'][1]:.1f}")
+    
+    best = max(beams, key=lambda x: x['score'])
+    print(f"\n Ordine: {best['order']}")
+    
+    return best['order']
 
-        # Meno flessibile → peso alto
 
-        weights[i] = max_flex - flexibility[i] + 1
+def f_eur2_inline(n, r, t, t_matrix, HOSP, D, l, e, alpha=1.0, beta=1.0):
+    """
+    Versione inline di f_eur2 (usa t già calcolato all'interno del metodo di ricerca).
+    NON richiede dizionario Time[iteration].
+    """
+    WP = np.zeros(2*n+1)
+    total_waiting_time = 0
+    
+    hospital_nodes = [node for node in r if node in HOSP]
+    for node in hospital_nodes:
+        node_pos = r.index(node)
+        if node in D:
+            WP[node] = max(0, l[node] - t[node_pos])
+        else:
+            WP[node] = max(0, t[node_pos] - e[node])
+        total_waiting_time += WP[node]
+    
+    total_time = 0
+    for i in range(len(r) - 1):
+        total_time += t_matrix[r[i]][r[i+1]]
+    
+    return alpha * total_waiting_time + beta * total_time
 
-    # Estrai pazienti uno alla volta con probabilità proporzionale al peso
 
-    ordered = []
 
-    remaining = list(PHOME)
 
-    while remaining:
+def beam_search_ordering_balanced(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, beam_width=2, alpha=1.0, beta=1.0):
+    """
+    Beam search con score diversi.
+    """
+ 
+    flexibility = {}
+    for i in PHOME:
+        pickup_flex = l[i] - e[i]
+        delivery_flex = l[i+3*n//2] - e[i+3*n//2]
+        flexibility[i] = (pickup_flex + delivery_flex) / 2
+    
+    beams = [{
+        'order': [],
+        'remaining': set(PHOME),
+        'S': [[0, 2*n+1]],
+    }]
+    
+    for step in range(len(PHOME)):
+        print(f"\nStep {step+1}/{len(PHOME)}")
+        all_candidates = []
+        
+        for beam in beams:
+            print(f"  Espando beam {beam['order']}...")
+            
+            for paziente in beam['remaining']:
+                new_S = []
+                costs = []
+                seen = set()
+                
+                for s in beam['S']:
+                    s_middle = s[1:-1]
+                    
+                    for h in range(len(s_middle) + 1):
+                        for k in range(h + 1, len(s_middle) + 2):
+                            for v in range(k + 1, len(s_middle) + 3):
+                                for w in range(v + 1, len(s_middle) + 4):
+                                    r = Insert(s, n, paziente, h, k, v, w)
+                                    r_tuple = tuple(r)
+                                    
+                                    if r_tuple not in seen:
+                                        ok, t = feasible(r, serv, t_matrix, T, n, e, l, 
+                                                       P, D, q, Q_max, debug=None)
+                                        if ok:
+                                            cost = f_eur2_inline(n, r, t, t_matrix, HOSP, D, l, e, alpha, beta)
+                                            new_S.append(r)
+                                            costs.append(cost)
+                                            seen.add(r_tuple)
+                
+                #  Score SEMPRE tupla (anche se non inseribile)
+                if len(new_S) == 0:
+                    # Paziente non inseribile -> score pessimo
+                    score = (-999999, -flexibility[paziente])  #  TUPLA!
+                    print(f"    + {paziente}: NON INSERIBILE")
+                else:
+                    num_seq = len(new_S)
+                    avg_cost = sum(costs) / len(costs)
+                    min_cost = min(costs)  # Migliore sequenza
+                    
+                    # Opzione 1: Media pesata 
+                    #score_value = num_seq * 30 - avg_cost
 
-        current_weights = [weights[p] for p in remaining]
+                    # Opzione 2: Privilegia costo minimo 
+                    #score_value = num_seq * 10 - min_cost
+                    
+                    # Opzione 3: Rapporto qualità/quantità
+                    score_value = num_seq / (avg_cost + 1)  # +1 per evitare divisione per 0
+                    
+                    
+                    score = (score_value, -flexibility[paziente])  # posso tolgiore il meno
+                    print(f"    + {paziente}: {num_seq} seq, avg_cost={avg_cost:.1f}, score={score_value:.1f}")
+                
+                all_candidates.append({
+                    'order': beam['order'] + [paziente],
+                    'remaining': beam['remaining'] - {paziente},
+                    'S': new_S if len(new_S) > 0 else beam['S'],  # Se non inseribile, mantieni S precedente
+                    'score': score
+                })
+        
+        
+        all_candidates.sort(key=lambda x: x['score'], reverse=True)
+        beams = all_candidates[:beam_width]
+        
+        print(f"\n Top {beam_width}:")
+        for i, b in enumerate(beams):
+            print(f"    {i+1}. {b['order']} → score={b['score'][0]:.1f}")
+    
+    best = max(beams, key=lambda x: x['score'])
+    print(f"\n Ordine: {best['order']}")
+    
+    return best['order']
 
-        chosen = random.choices(remaining, weights=current_weights, k=1)[0]
-
-        ordered.append(chosen)
-
-        remaining.remove(chosen)
-
-    #con reverse meno flessiili dopo
-
-    return ordered.reverse()
 

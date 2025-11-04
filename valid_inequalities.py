@@ -23,7 +23,7 @@ def add_time_bounds_inequalities(model, x, B, V, idx, e, l, s, t, n, active=True
         for j in V:
             if i != j and (j, i) in idx:
                 coeff = max(0, e[j] - e[i] + s[j] + t[j][i])
-                if coeff > 1e-6: #PERCHè FACCIO QUESTO CONTROLLO?? POTEI TOGLIERLO penso serva ad avere dei vingoli aggiuntivi anhc equando il guadagno è veramnte poco
+                if coeff > 1e-6:# evito vingoli aggiuntivi quando il guadagno è veramnte poco
                     coeffs[j] = coeff
         
         if coeffs:
@@ -104,7 +104,6 @@ def add_precedence_inequalities(model, x, P, idx, n, active=True, use_conservati
         print("  Precedence inequalities disattivate")
         return 0, 0
     
-    print("  Precedence inequalities (Ruland & Rodin) - CONSERVATIVE MODE...")
     
     count_var1, count_var2 = 0, 0
     #Solo sottoinsiemi minimali
@@ -155,7 +154,7 @@ def add_precedence_inequalities(model, x, P, idx, n, active=True, use_conservati
     
         
         # [Implementazione originale qui se necessario in futuro]
-        # Per ora, non implementata per evitare problemi
+
         
         pass
     
@@ -193,14 +192,14 @@ def add_infeasible_path_constraints(model, x, P, idx, t, s, T, n,
         # CASO p=1: Arco diretto (i → n+i)
        
         # Questa è la situazione più semplice: percorso diretto
-        # Se troppo lungo, andrebbe eliminato in preprocessing
+        # (Se troppo lungo, andrebbe eliminato in preprocessing)
         # Ma per completezza, aggiungiamo inequality
         
         if (i, delivery) in idx:
             direct_duration = t[i][delivery] + s[i]
             
             if direct_duration > max_ride_time:
-                # x[i, n+i] ≤ 0  (equivalente a eliminare l'arco)
+                # x[i, n+i] <= 0  (equivalente a eliminare l'arco)
                 model.addConstr(
                     x[i, delivery] == 0,
                     name=f"VI_infeas_direct_{i}_{delivery}"
@@ -209,7 +208,7 @@ def add_infeasible_path_constraints(model, x, P, idx, t, s, T, n,
                 count_constraints += 1
         
       
-        # CASO p≥2: Percorsi con nodi intermedi
+        # CASO p>=2: Percorsi con nodi intermedi
 
         # Enumera percorsi con 1, 2, ..., max_path_length nodi intermedi
         
@@ -223,7 +222,7 @@ def add_infeasible_path_constraints(model, x, P, idx, t, s, T, n,
             
             # Genera tutte le permutazioni di lunghezza num_intermediate
             for intermediate_sequence in permutations(available, num_intermediate):
-                # Costruisci il percorso: i → k₁ → k₂ → ... → kₚ → n+i
+                # Costruisci il percorso: i -> k1 -> k2 -> ... -> kp -> n+i
                 path = [i] + list(intermediate_sequence) + [delivery]
                 
                 # Verifica che tutti gli archi esistano
@@ -235,18 +234,18 @@ def add_infeasible_path_constraints(model, x, P, idx, t, s, T, n,
                 total_duration = 0
                 for j in range(len(path)-1):
                     total_duration += t[path[j]][path[j+1]]
-                    if j < len(path)-1:  # Aggiungi service time ai nodi intermedi
-                        total_duration += s[path[j+1]] if path[j+1] != delivery else 0
+                    # Aggiungi service time solo se:
+                    # 1. Non è il pickup iniziale (già escluso da L[i])
+                    # 2. Non è il delivery finale (end of ride)
+                    if j > 0 and path[j+1] != delivery:
+                        total_duration += s[path[j+1]]
                 
                 # Se il percorso viola il max ride time
                 if total_duration > max_ride_time:
                     # Aggiungi inequality: Σ x[arc] ≤ p-1
                     p = len(path_arcs)  # Numero di archi
                     
-                    model.addConstr(
-                        quicksum(x[arc] for arc in path_arcs) <= p - 1,
-                        name=f"VI_infeas_path_{i}_{num_intermediate}_{count_paths}"
-                    )
+                    model.addConstr(quicksum(x[arc] for arc in path_arcs) <= p - 1,name=f"VI_infeas_path_{i}_{num_intermediate}_{count_paths}")
                     count_paths += 1
                     count_constraints += 1
     
@@ -258,6 +257,102 @@ def add_infeasible_path_constraints(model, x, P, idx, t, s, T, n,
         print(f" Considera di ridurre max_path_length (attuale: {max_path_length})")
     
     return count_paths, count_constraints
+
+
+def add_infeasible_path_constraints_conservative(model, x, P, idx, t, s, T, n, 
+                                                 max_path_length=1, 
+                                                 min_violation_ratio=1.05,
+                                                 active=True):
+    """
+    VALID INEQUALITIES: Infeasible Path Constraints - VERSIONE CONSERVATIVA
+    
+     Aggiunge vincolo solo se violazione significativa (min_violation_ratio)
+    Limita enumerazione percorsi per evitare esplosione combinatoria
+    
+    Args:
+        min_violation_ratio: Aggiungi vincolo solo se durata > T[i] * ratio
+                            (default 1.05 = solo percorsi >5% troppo lunghi)
+    """
+    if not active:
+        return 0, 0
+    
+    from itertools import combinations  # Non permutations!
+    
+    count_paths = 0
+    count_constraints = 0
+    
+    intermediate_nodes = list(range(1, 2*n+1))
+    
+    for i in P:
+        delivery = n + i
+        max_ride_time = T[i]
+        
+        
+        # CASO p=1: Arco diretto (i → n+i) - PREPROCESSING
+       
+        if (i, delivery) in idx:
+            # Durata percorso diretto
+            direct_duration = t[i][delivery]
+            
+            # Aggiungi solo se violazione significativa
+            if direct_duration > max_ride_time * min_violation_ratio:
+                model.addConstr(
+                    x[i, delivery] == 0,
+                    name=f"VI_infeas_direct_{i}_{delivery}"
+                )
+                count_paths += 1
+                count_constraints += 1
+        
+        
+        # CASI p≥2: Percorsi con nodi intermedi
+   
+        if max_path_length <= 1:
+            continue  # Skip se solo preprocessing
+        
+        for num_intermediate in range(1, min(max_path_length, 3) + 1):  # Max 3!
+            available = [node for node in intermediate_nodes 
+                        if node != i and node != delivery]
+            
+            if len(available) < num_intermediate:
+                continue
+            
+            # IMPORTANTE: Usa combinations invece di permutations per ridurre numero
+            # (ordine non importa per identificare percorsi "ovviamente" infeasibili)
+            for intermediate_set in combinations(available, num_intermediate):
+                # Testa SOLO l'ordine "naturale" (per semplicità)
+           
+                intermediate_sequence = sorted(intermediate_set)
+                
+                path = [i] + list(intermediate_sequence) + [delivery]
+                path_arcs = [(path[j], path[j+1]) for j in range(len(path)-1)]
+                
+                # Verifica esistenza archi
+                if not all(arc in idx for arc in path_arcs):
+                    continue
+                
+                # Calcola durata 
+                total_duration = sum(t[path[j]][path[j+1]] for j in range(len(path)-1))
+                
+                # Aggiungi solo se violazione SIGNIFICATIVA
+                if total_duration > max_ride_time * min_violation_ratio:
+                    p = len(path_arcs)
+                    model.addConstr(
+                        quicksum(x[arc] for arc in path_arcs) <= p - 1,
+                        name=f"VI_infeas_cons_{i}_{count_paths}"
+                    )
+                    count_paths += 1
+                    count_constraints += 1
+    
+    print(f"    → Percorsi infeasibili: {count_paths}")
+    print(f"    → Vincoli aggiunti: {count_constraints}")
+    
+    if count_constraints > 500:
+        print(f"     WARNING: Molti vincoli ({count_constraints})")
+        print(f"       Considera max_path_length=1 o min_violation_ratio più alto")
+    
+    return count_paths, count_constraints
+
+
 
 
 
@@ -273,10 +368,13 @@ def add_all_valid_inequalities(model, variables, data, config=None):
     """
     if config is None:
         config = {
-            'time_bounds': False,
+            'time_bounds': True,
             'load_bounds': False,
-            'precedence': False, #{'max_subset_size': 5}  # Regola se necessario
-            'infeasible_paths':False # {'max_path_length': 2}
+            'precedence': {'max_subset_size': 5},  # Regola se necessario
+            'infeasible_paths': {'max_path_length': 2,
+        'min_violation_ratio': 1.15,  # Solo percorsi >15% troppo lunghi
+        'max_paths_per_request': 10   # NUOVO: limita percorsi per richiesta
+        }
             # Aggiungerai qui altre famiglie in futuro
         }
     
@@ -327,7 +425,7 @@ def add_all_valid_inequalities(model, variables, data, config=None):
         else:
             max_len = 2
         
-        paths, constrs = add_infeasible_path_constraints(
+        """paths, constrs = add_infeasible_path_constraints(
             model=model,
             x=variables['x'],
             P=data['P'],
@@ -338,7 +436,18 @@ def add_all_valid_inequalities(model, variables, data, config=None):
             n=data['n'],
             max_path_length=max_len,
             active=True
-        )
+        )"""
+        paths, constrs =add_infeasible_path_constraints_conservative(model=model,
+            x=variables['x'],
+            P=data['P'],
+            idx=data['idx'],
+            t=data['t'],
+            s=data['s'],
+            T=data['T'],  # <-- AGGIUNGI T al data dict
+            n=data['n'],
+            max_path_length=1, 
+            min_violation_ratio=1.05,
+            active=True)
         stats['infeasible_paths'] = {'paths': paths, 'constraints': constrs}
 
 
