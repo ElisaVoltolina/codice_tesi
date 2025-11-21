@@ -92,8 +92,43 @@ def find_original_ids_from_new_indices(instance_filename, new_pickup_idx, new_de
 
  
 
+def calculate_distances_from_travel_matrix(V, t):
+    """Usa matrice tempi per calcolare la distanza 
+    ogni nodo dal deposito iniziale"""
+    distances = {}
+    for node in V:
+        distances[node] = t[0][node] if node != 0 else 0
+    return distances
 
 
+
+def calculate_pair_difficulty(i, n, t, e, l, s):
+    """
+    Calcola la 'difficoltà' di una coppia outbound-inbound
+    Considera: distanza totale, compatibilità time window, tempo di servizio
+    """
+    outbound = i
+    inbound = i + n // 2
+    
+    # Fattore 1: Distanza totale della coppia (pickup -> delivery -> pickup_inbound -> delivery_inbound)
+    total_distance = t[outbound][outbound + n] + t[outbound + n][inbound] + t[inbound][inbound + n]
+    
+    # Fattore 2: Compatibilità time window
+    # Tempo minimo necessario per completare outbound prima di iniziare inbound
+    min_time_for_sequence = e[outbound] + s[outbound] + t[outbound][outbound + n] + s[outbound + n] + t[outbound + n][inbound]
+    time_window_slack = l[inbound] - min_time_for_sequence
+    
+    # Fattore 3: Rigidità complessiva (somma servizi)
+    total_service_time = s[outbound] + s[outbound + n] + s[inbound] + s[inbound + n]
+    
+    # Combina i fattori (più alto = più difficile)
+    difficulty = total_distance + max(0, -time_window_slack) * 10 + total_service_time
+    
+    return difficulty, {
+        'total_distance': total_distance,
+        'time_slack': time_window_slack,
+        'service_time': total_service_time
+    }
   
 
 

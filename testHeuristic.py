@@ -5,6 +5,7 @@ import os
 from readREAL import extract_darp_data
 from euristica_no_scart import*
 
+""" funzioni per testare la funzione euristica e per stampare il confronto tra esatto e euristica"""
 
 
 def load_exact_results(exact_csv):
@@ -126,7 +127,7 @@ def confronto(instances_folder="router_bus_main\DATI", exact_results="risultati/
 
 
 
-def test(instances_folder="router_bus_main/DATI", output_csv="risultati/risultati_EuristicFast.csv"):
+def test(instances_folder="router_bus_main/DATI", output_csv="risultati_finali/heuristic_60L5.csv"):
      with open(output_csv, mode='w', newline='') as file:    #evito righe vuote co newline
         writer = csv.writer(file)
         writer.writerow(["istanza", "num_richieste", "richieste_servite_euristica", "tempo_sec_euristica","valore_ottimo_euristica"])  
@@ -179,10 +180,11 @@ def test(instances_folder="router_bus_main/DATI", output_csv="risultati/risultat
 
 def main():
     print("Avvio test su tutte le istanze...")
-    #test(instances_folder="router_bus_main/DATI",output_csv="risultati/Euristic_timelimit60L5.csv")
-    confronto(instances_folder="router_bus_main\DATI", exact_results="risultati/risultati_penality_DATI60.csv", heuristic_result="risultati/Euristic_timelimit_div_60L5.csv", output_csv="risultati/confronto_timelimit_div_60L5.csv")
-    #print("\nTest completati!")
-    print("Confronto eseguito")
+    test(instances_folder="router_bus_main/DATI",output_csv="risultati_finali/heuristic_60L5.csv")
+    print("\nTest completati!")
+    
+    #confronto(instances_folder="router_bus_main\DATI", exact_results="risultati/risultati_penality_DATI60.csv", heuristic_result="risultati/Euristic_timelimit_div_60L5.csv", output_csv="risultati/confronto_timelimit_div_60L5.csv")
+    #print("Confronto eseguito")
 
 
 

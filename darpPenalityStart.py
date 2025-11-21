@@ -1,10 +1,22 @@
 import gurobipy as gb
 from valid_inequalities import*
 from gurobipy import Model, GRB, quicksum
+from preprocessing import*
 
 def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q, Q,  penalty_weights=None, use_valid_inequalities=True, vi_config=None,  euristic_solution=None):
-    """provo ad inserire nuove valid inequality e ad aggiungere in mip.start"""
+    """provo ad inserire nuove valid inequality e ad aggiungere in mip.start
+    preprocessing e allegertito codice (tolto variabile in_window)"""
     model = Model("DARP")
+
+
+    #PREPRECESSING
+    incop_pairs=compute_incompatible_requests(n, PHOME, e, l, s,t,  T,q,Q)
+    inf_req= infeasible_request(n, PHOME, e, l, s,t, T)
+
+    #debag
+    print(f"Preprocessing: {len(incop_pairs)} coppie incompatibili, {len(inf_req)} richieste infeasible")
+
+
 
     # Se non vengono forniti i pesi delle penalità, usa valori default
     #poi posso privilegarne alcuen
@@ -20,12 +32,14 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     WP = model.addVars(HOSP, vtype=GRB.CONTINUOUS, name="WP")  #tempo di attesa del paziente al nodo i (ospedale)
     Q_var = model.addVars(V, vtype=GRB.CONTINUOUS, name="Q")  #carico del veicolo quando lascia il nodo i
 
-    # Funzione obiettivo MODIFICATA
+    # Funzione obiettivo
     obj_travel_time = quicksum(t[i][j] * x[i, j] for i,j in idx)   #tempo di percorrenza
     obj_waiting_time = quicksum(WP[i] for i in HOSP)   #tempo attesa all'ospedale (esclusa la durata della visita in sè)
     obj_penalty = quicksum(penalty_weights[i] * (1 - y[i]) for i in P)  # Penalità per richieste non servite
 
     model.setObjective(obj_travel_time + obj_waiting_time + obj_penalty, GRB.MINIMIZE) 
+
+
 
 
     # Vincoli
@@ -74,7 +88,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
      
 
 
-    """#PRODIAMO Ad ALLEGGERIRE QUESTA PARTE
+    #PRODIAMO Ad ALLEGGERIRE QUESTA PARTE
 
     # Variabile binaria per determinare se A[i] è all'interno della finestra temporale
     # Se in_window[i] = 1, allora B[i] = A[i]
@@ -121,10 +135,10 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
             #model.addGenConstrIndicator(y[i-n], False, A[i] == 0, name=f"reset_A_delivery_non_servito_{i}")
             #model.addGenConstrIndicator(y[i-n], False, B[i] == 0, name=f"reset_B_delivery_non_servito_{i}")
     
-   #se imposto a zero quando non servita diventa infattibile PERCHè"""
+   #se imposto a zero quando non servita diventa infattibile PERCHè
     
     
-    # VINCOLI TEMPORALI 
+    """# VINCOLI TEMPORALI 
 
     # 1. PROPAGAZIONE TEMPORALE tra nodi consecutivi
     for i, j in idx:
@@ -138,7 +152,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
 
     # 3. TIME WINDOWS - Vincoli base per TUTTI i nodi
     model.addConstrs((B[i] >= e[i] for i in V), name="timewindow_early")
-    model.addConstrs((B[i] <= l[i] for i in V), name="timewindow_late")
+    model.addConstrs((B[i] <= l[i] for i in V), name="timewindow_late")"""
 
 
 
@@ -159,9 +173,9 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
 
 
 
-    """# Time window    (QUESTI SONO SUPERFLUI PENSO)
+    # Time window    (QUESTI SONO SUPERFLUI PENSO)  !!!!!!
     model.addConstrs((B[i] >= e[i] for i in V), name="timewindow1")
-    model.addConstrs((B[i] <= l[i] for i in V), name="timewindow2")"""  
+    model.addConstrs((B[i] <= l[i] for i in V), name="timewindow2") 
 
 
 
@@ -237,6 +251,15 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
 
 
     
+    for i,j in incop_pairs:
+        model.addConstr(y[i] + y[j]<=1, name= f"incop_{i}_{j}")
+        
+    for i in inf_req:
+        model.addConstr(y[i] == 0, name=f"infeasible_req_{i}")   
+
+
+
+
    
     # APPLICA MIP START SE DISPONIBILE
    
@@ -363,7 +386,7 @@ def euristic_solution_to_mip_start(euristic_route, n, P, D, PD, V, idx, e, l, s,
         else:
             mip_start[('y',i)]=0
 
-    '''
+    
     # 3. Calcola tempi A, B, Q_var SOLO per i nodi visitati
     current_time = e[0]  # Parte dal deposito iniziale
     current_load = 0
@@ -404,7 +427,7 @@ def euristic_solution_to_mip_start(euristic_route, n, P, D, PD, V, idx, e, l, s,
             mip_start[('L', i)] = max(0, ride_time)
     
     print(f"   ✓ Calcolati ride time per {len([k for k in mip_start if k[0] == 'L'])} richieste")
-    '''
+    
 
     
     return mip_start
@@ -430,7 +453,7 @@ def apply_mip_start(model, mip_start_values, x, y, A, B, L, Q_var, P, V, idx):
                 y[i].Start = mip_start_values[('y', i)]
                 count['y'] += 1
         
-        '''# Applica valori per A, B, Q (tempi e carico)
+        # Applica valori per A, B, Q (tempi e carico)
         for i in V:
             if ('A', i) in mip_start_values:
                 A[i].Start = mip_start_values[('A', i)]
@@ -449,7 +472,7 @@ def apply_mip_start(model, mip_start_values, x, y, A, B, L, Q_var, P, V, idx):
             if ('L', i) in mip_start_values:
                 L[i].Start = mip_start_values[('L', i)]
                 count['L'] += 1
-        '''
+        
         print(f"  MIP start applicato:")
         print(f"- {count['x']} archi")
         print(f" - {count['y']} richieste")

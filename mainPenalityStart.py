@@ -4,7 +4,7 @@ from readREAL import extract_darp_data
 from valid_inequalities import*
 from euristica_no_scart import*
 
-json_file_path= "router_bus_main\DATI\input_modello_8b.json"
+json_file_path= "router_bus_main\DATI\input_5a.json"
 
 darp_data= extract_darp_data(json_file_path)
 
@@ -32,6 +32,4 @@ T=darp_data['T']
 #proviamo a dare il risulatato della multi run con limite un minuto
 euristic_route,_,_,_= heuristic_multirun(n, PHOME, HOSP, D, l, e, serv, t_matrix,T, P, q, Q_max, time_limit=60)
 solution= solve_darp(**darp_data, euristic_solution= euristic_route )    #con euristic_solution= None non ho nessun mip_start
-
-
 

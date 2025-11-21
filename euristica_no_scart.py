@@ -218,8 +218,8 @@ if __name__=='__main__':
 
 
     #prova beam search
-    best_order=beam_search_ordering_balanced(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, beam_width=2, alpha=1.0, beta=1.0)
-    print("il miglior ordinamento trovato è:", best_order)
+    #best_order=beam_search_ordering_balanced(n, PHOME, HOSP, D, l, e, serv, t_matrix, T, P, q, Q_max, beam_width=2, alpha=1.0, beta=1.0)
+    #print("il miglior ordinamento trovato è:", best_order)
 
 
 

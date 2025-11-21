@@ -3,7 +3,10 @@ import gurobipy as gb
 from gurobipy import Model, GRB, quicksum
 
 def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q, Q,  penalty_weights=None):
-    
+    """questo è il codice base NO valid ineq, NO preprocessing, NO mip start
+    SI tolta parte con variabili in_window"""
+
+
     model = Model("DARP")
 
     # Se non vengono forniti i pesi delle penalità, usa valori default
@@ -20,7 +23,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     WP = model.addVars(HOSP, vtype=GRB.CONTINUOUS, name="WP")  #tempo di attesa del paziente al nodo i (ospedale)
     Q_var = model.addVars(V, vtype=GRB.CONTINUOUS, name="Q")  #carico del veicolo quando lascia il nodo i
 
-    # Funzione obiettivo MODIFICATA
+    # Funzione obiettivo 
     obj_travel_time = quicksum(t[i][j] * x[i, j] for i,j in idx)   #tempo di percorrenza
     obj_waiting_time = quicksum(WP[i] for i in HOSP)   #tempo attesa all'ospedale (esclusa la durata della visita in sè)
     obj_penalty = quicksum(penalty_weights[i] * (1 - y[i]) for i in P)  # Penalità per richieste non servite
@@ -97,7 +100,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
 
 
 
-    # Variabile binaria per determinare se A[i] è all'interno della finestra temporale
+    # Variabile binaria per determinare se A[i] è all'interno della finestra temporale !!!!!
     # Se in_window[i] = 1, allora B[i] = A[i]
     # Se in_window[i] = 0, allora B[i] = e[i]
     in_window = model.addVars(V, vtype=GRB.BINARY, name="in_window")
@@ -149,6 +152,23 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
    #se imposto a zero quando non servita diventa infattibile PERCHè
 
    
+    """ # VINCOLI TEMPORALI 
+
+    # 1. PROPAGAZIONE TEMPORALE tra nodi consecutivi
+    for i, j in idx:
+        model.addConstr(
+            A[j] >= B[i] + s[i] + t[i][j] - M[i,j] * (1 - x[i,j]), 
+            name=f"tempo_arrivo_{i}_{j}"
+        )
+
+    # 2. B >= A sempre (inizio servizio dopo arrivo)
+    model.addConstrs((B[i] >= A[i] for i in V), name="B_dopo_A")
+
+    # 3. TIME WINDOWS - Vincoli base per TUTTI i nodi
+    model.addConstrs((B[i] >= e[i] for i in V), name="timewindow_early")
+    model.addConstrs((B[i] <= l[i] for i in V), name="timewindow_late")"""
+
+
 
    
     # Ride time (solo per richieste servite)
@@ -166,10 +186,9 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
 
 
 
-    # Time window    (qui non serve disattivarli) QUESTI LI POSSO TOGLIERE PENSO
+    # Time window    (qui non serve disattivarli) QUESTI LI POSSO TOGLIERE PENSO !!!!!!
     model.addConstrs((B[i] >= e[i] for i in V), name="timewindow1")
     model.addConstrs((B[i] <= l[i] for i in V), name="timewindow2")  
-
 
 
 
@@ -177,9 +196,11 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     # Tempo di attesa
     for i in PHOSP:
         model.addGenConstrIndicator(y[i], True,  WP[i] >= A[i] - e[i] , name="tempo_attesa_pickup")
+        model.addGenConstrIndicator(y[i], True, WP[i] >= 0, name=f"wp_ind_nonneg_{i}")
         model.addGenConstrIndicator(y[i], False, WP[i] == 0, name=f"no_attesa_pickup_non_servito_{i}")
     for i in DHOSP:
-        model.addGenConstrIndicator( y[i-n], True  ,WP[i] >= A[i] - l[i] , name="tempo_attesa_delivery")
+        #model.addGenConstrIndicator( y[i-n], True  ,WP[i] >= A[i] - l[i] , name="tempo_attesa_delivery")  QUI C'ERA QUESTO ERRORE
+        model.addGenConstrIndicator( y[i-n], True  ,WP[i] >= l[i]- A[i] , name="tempo_attesa_delivery")
         model.addGenConstrIndicator(y[i-n], False, WP[i] == 0, name=f"no_attesa_delivery_non_servito_{i}")
     model.addConstrs((WP[i] >= 0 for i in HOSP), name="tempo_attesa")
 
@@ -218,7 +239,7 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
             model.addConstr(u[j] >= u[i] + 1 - (2*n+1) * (1 - x[i, j]), name=f"subtour_{i}_{j}")
     
     # Risoluzione con timeout aumentato
-    model.Params.TimeLimit = 600  # 10 minuti di timeout
+    model.Params.TimeLimit = 60  # TEMPO LIMITE(in secondi)     1 MIN  
     model.Params.MIPGap = 0.05    # 5% gap di ottimalità
     model.Params.FeasibilityTol = 1e-6  # Tolleranza di feasibility più stringente
     
@@ -230,15 +251,19 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
     model.optimize()
 
     if model.status == GRB.INFEASIBLE:
-        print("Il modello è infattibile! Cerco il conflitto tra i vincoli...")
-        model.computeIIS()
-        model.write("model_infeasibleP.ilp")  # Salva i vincoli impossibili in un file
+        print("Il modello è infattibile! ")
+
+        #DEBAG
+        #model.computeIIS()
+        #model.write("model_infeasibleP.ilp")  # Salva i vincoli impossibili in un file
 
     # Recupero della soluzione 
     if model.status == GRB.OPTIMAL or model.status == GRB.TIME_LIMIT:
         if model.status == GRB.OPTIMAL:
             print('Soluzione ottimale trovata')
+            current_gap=0.0
         else:
+            current_gap=model.MIPGap
             print(f'Soluzione sub-ottimale trovata con gap {model.MIPGap*100:.2f}%')
             
         solution_x = {}
@@ -269,8 +294,10 @@ def solve_darp(V, PHOSP, DHOSP, HOSP, PHOME, P, D, PD, idx, n, t, s, e, l, T, q,
         print("\nTempi di inizio servizio:")
         for i in V:
             print(f"Nodo {i}: {solution_B[i]:.2f} (finestra: {e[i]}-{l[i]})")
-            
-        return solution_x, solution_A, solution_L, solution_B, solution_WP, solution_Q, solution_y  
+
+
+        print(current_gap, model.ObjVal , model.ObjBound)      
+        return (solution_x, solution_A, solution_L, solution_B, solution_WP, solution_Q, solution_y), current_gap, model.ObjVal , model.ObjBound 
     else:
         print("No optimal solution found")
-        return None
+        return None, None
